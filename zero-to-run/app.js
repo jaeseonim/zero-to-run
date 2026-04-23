@@ -1,0 +1,524 @@
+/* ====================================================
+   app.js — 첫 발걸음 런닝 앱
+   기술 스택: Vanilla JavaScript + localStorage
+   ==================================================== */
+
+
+/* ====================================================
+   ① 설정값 모음 (여기만 수정하면 됩니다)
+   ==================================================== */
+
+// 앱 이름 (localStorage 키 접두어)
+const APP_KEY = 'firststep';
+
+// 7일 커리큘럼 정의
+// type: 'workout' | 'rest'
+// phases: 운동 구간 배열 (순서대로 실행됨)
+//   - label: 화면에 표시할 이름
+//   - type: 'warmup' | 'jog' | 'walk' | 'cooldown'
+//   - duration: 초 단위 (분×60)
+const CURRICULUM = [
+  {
+    day: 1,
+    title: '첫 걸음',
+    type: 'workout',
+    phases: [
+      { label: '워밍업',  type: 'warmup',   duration: 3 * 60 },
+      { label: '조깅',    type: 'jog',      duration: 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '쿨다운',  type: 'cooldown', duration: 3 * 60 },
+    ],
+  },
+  {
+    day: 2,
+    title: '두 번째 발걸음',
+    type: 'workout',
+    phases: [
+      { label: '워밍업',  type: 'warmup',   duration: 3 * 60 },
+      { label: '조깅',    type: 'jog',      duration: 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '쿨다운',  type: 'cooldown', duration: 3 * 60 },
+    ],
+  },
+  {
+    day: 3,
+    title: '조금 더 길게',
+    type: 'workout',
+    phases: [
+      { label: '워밍업',  type: 'warmup',   duration: 3 * 60 },
+      { label: '조깅',    type: 'jog',      duration: 90 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 90 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 90 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 90 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '쿨다운',  type: 'cooldown', duration: 3 * 60 },
+    ],
+  },
+  {
+    day: 4,
+    title: '회복의 날',
+    type: 'rest',   // ← 회복일은 타이머 없이 별도 화면
+  },
+  {
+    day: 5,
+    title: '강도 업',
+    type: 'workout',
+    phases: [
+      { label: '워밍업',  type: 'warmup',   duration: 3 * 60 },
+      { label: '조깅',    type: 'jog',      duration: 90 },
+      { label: '걷기',    type: 'walk',     duration: 60 },
+      { label: '조깅',    type: 'jog',      duration: 90 },
+      { label: '걷기',    type: 'walk',     duration: 60 },
+      { label: '조깅',    type: 'jog',      duration: 90 },
+      { label: '걷기',    type: 'walk',     duration: 60 },
+      { label: '조깅',    type: 'jog',      duration: 90 },
+      { label: '걷기',    type: 'walk',     duration: 60 },
+      { label: '쿨다운',  type: 'cooldown', duration: 3 * 60 },
+    ],
+  },
+  {
+    day: 6,
+    title: '더 길게 뛰기',
+    type: 'workout',
+    phases: [
+      { label: '워밍업',  type: 'warmup',   duration: 3 * 60 },
+      { label: '조깅',    type: 'jog',      duration: 2 * 60 },
+      { label: '걷기',    type: 'walk',     duration: 60 },
+      { label: '조깅',    type: 'jog',      duration: 2 * 60 },
+      { label: '걷기',    type: 'walk',     duration: 60 },
+      { label: '조깅',    type: 'jog',      duration: 2 * 60 },
+      { label: '걷기',    type: 'walk',     duration: 60 },
+      { label: '조깅',    type: 'jog',      duration: 2 * 60 },
+      { label: '걷기',    type: 'walk',     duration: 60 },
+      { label: '쿨다운',  type: 'cooldown', duration: 3 * 60 },
+    ],
+  },
+  {
+    day: 7,
+    title: '마지막 한 바퀴',
+    type: 'workout',
+    phases: [
+      { label: '워밍업',  type: 'warmup',   duration: 3 * 60 },
+      { label: '조깅',    type: 'jog',      duration: 2 * 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 2 * 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 2 * 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '조깅',    type: 'jog',      duration: 2 * 60 },
+      { label: '걷기',    type: 'walk',     duration: 90 },
+      { label: '쿨다운',  type: 'cooldown', duration: 3 * 60 },
+    ],
+  },
+];
+
+// 구간 타입별 색상 (CSS 클래스와 대응)
+const PHASE_CHIP_CLASS = {
+  warmup:   'chip-warmup',
+  jog:      'chip-jog',
+  walk:     'chip-walk',
+  cooldown: 'chip-cooldown',
+};
+
+// 구간 타입별 화면 레이블 텍스트
+const PHASE_LABELS = {
+  warmup:   '워밍업 — 천천히 준비해요',
+  jog:      '조깅 — 편하게 달려요',
+  walk:     '걷기 — 숨 고르기',
+  cooldown: '쿨다운 — 마무리 스트레칭',
+};
+
+
+/* ====================================================
+   ② 앱 상태 (메모리 + localStorage 동기화)
+   ==================================================== */
+
+// localStorage에서 불러오기. 없으면 초기값으로 세팅.
+function loadState() {
+  const saved = localStorage.getItem(APP_KEY);
+  if (saved) {
+    return JSON.parse(saved);
+  }
+  // 처음 실행 시 초기 상태
+  return {
+    currentDay: 1,          // 현재 진행 중인 일차 (1~7)
+    completedDays: [],       // 완료한 일차 배열 (예: [1, 2, 3])
+  };
+}
+
+// 상태를 localStorage에 저장
+function saveState(state) {
+  localStorage.setItem(APP_KEY, JSON.stringify(state));
+}
+
+// 전역 상태
+let STATE = loadState();
+
+
+/* ====================================================
+   ③ 타이머 전역 변수
+   ==================================================== */
+let timerInterval   = null;   // setInterval 핸들러
+let currentPhaseIdx = 0;      // 현재 구간 인덱스
+let remainingSec    = 0;      // 현재 구간 남은 초
+let totalElapsed    = 0;      // 전체 경과 초
+let totalDuration   = 0;      // 전체 운동 시간(초)
+let currentPhases   = [];     // 현재 운동의 구간 배열
+
+
+/* ====================================================
+   ④ 화면 전환 헬퍼
+   ==================================================== */
+
+// 특정 화면만 보이게 전환
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+
+/* ====================================================
+   ⑤ 홈 화면 렌더링
+   ==================================================== */
+
+function renderHome() {
+  showScreen('screen-home');
+
+  const day     = STATE.currentDay;
+  const done    = STATE.completedDays;
+  const todayDone = done.includes(day);
+
+  // 트랙 중앙 숫자 업데이트
+  document.getElementById('track-day-num').textContent = day;
+
+  // 운동장 트랙 그리기
+  drawTrack(day, done);
+
+  // 오늘 카드 vs 완료 카드 분기
+  if (todayDone) {
+    document.getElementById('today-card').classList.add('hidden');
+    document.getElementById('done-card').classList.remove('hidden');
+
+    // 다음날 안내 메시지
+    const nextMsg = day >= 7
+      ? '7일 완주를 축하해요! 🎉'
+      : `내일은 ${day + 1}일차에요`;
+    document.getElementById('done-next').textContent = nextMsg;
+
+  } else {
+    document.getElementById('today-card').classList.remove('hidden');
+    document.getElementById('done-card').classList.add('hidden');
+
+    const plan = CURRICULUM[day - 1];  // 배열은 0부터 시작하므로 -1
+
+    // 오늘 카드 정보 채우기
+    document.getElementById('today-title').textContent = `${day}일차 — ${plan.title}`;
+
+    if (plan.type === 'rest') {
+      document.getElementById('today-meta').textContent = '오늘은 회복일이에요 🌿\n가벼운 산책 15~20분';
+      document.getElementById('btn-start').textContent = '회복일 보기 →';
+    } else {
+      const mins = Math.round(totalSeconds(plan.phases) / 60);
+      const jogCount = plan.phases.filter(p => p.type === 'jog').length;
+      document.getElementById('today-meta').textContent =
+        `총 ${mins}분 · 조깅 ${jogCount}회`;
+      document.getElementById('btn-start').textContent = '시작하기 →';
+    }
+  }
+}
+
+// 운동장 트랙 SVG 그리기
+function drawTrack(currentDay, completedDays) {
+  const svg    = document.getElementById('track-svg');
+  const dotsG  = document.getElementById('track-dots');
+  const progressEl = document.getElementById('track-progress');
+
+  // 타원 둘레 계산 (근사값: π × (3(a+b) - √((3a+b)(a+3b))))
+  const a = 130, b = 110;
+  const perimeter = Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+
+  // 완료된 날만큼 원호 길이 계산
+  const completedCount = completedDays.length;
+  const arcLen = (completedCount / 7) * perimeter;
+  progressEl.setAttribute('stroke-dasharray', `${arcLen} ${perimeter}`);
+
+  // 기존 점 초기화
+  dotsG.innerHTML = '';
+
+  // 7개 점을 타원 위에 균등 배치
+  // 각도: -90도(위)부터 시작해서 360/7씩 증가
+  for (let i = 0; i < 7; i++) {
+    const angleDeg = -90 + (360 / 7) * i;
+    const angleRad = (angleDeg * Math.PI) / 180;
+
+    // 타원 위의 좌표 계산 (중심 160, 160)
+    const x = 160 + a * Math.cos(angleRad);
+    const y = 160 + b * Math.sin(angleRad);
+
+    const dayNum  = i + 1;
+    const isDone  = completedDays.includes(dayNum);
+    const isToday = dayNum === currentDay && !isDone;
+
+    // 상태에 따른 스타일 결정
+    const circleClass = isDone ? 'dot-done' : (isToday ? 'dot-today' : 'dot-future');
+    const labelClass  = isDone ? 'dot-label-done' : (isToday ? 'dot-label-today' : 'dot-label-future');
+    const r = isToday ? 20 : 16;  // 오늘은 조금 더 크게
+
+    // 원 추가
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', x.toFixed(1));
+    circle.setAttribute('cy', y.toFixed(1));
+    circle.setAttribute('r', r);
+    circle.setAttribute('class', circleClass);
+    dotsG.appendChild(circle);
+
+    // 숫자 레이블 추가
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', x.toFixed(1));
+    text.setAttribute('y', (y + 4).toFixed(1));  // 수직 중앙 정렬 보정
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('class', labelClass);
+    text.setAttribute('font-weight', isToday ? '700' : '400');
+    text.textContent = isDone ? '✓' : dayNum;
+    dotsG.appendChild(text);
+  }
+}
+
+// 구간 배열의 총 초 계산 (오늘 카드 메타 정보에 사용)
+function totalSeconds(phases) {
+  return phases.reduce((sum, p) => sum + p.duration, 0);
+}
+
+
+/* ====================================================
+   ⑥ 운동 시작
+   ==================================================== */
+
+function startWorkout() {
+  const plan = CURRICULUM[STATE.currentDay - 1];
+
+  // 회복일이면 회복 화면으로 분기
+  if (plan.type === 'rest') {
+    showScreen('screen-rest');
+    return;
+  }
+
+  // 타이머 변수 초기화
+  currentPhases   = plan.phases;
+  currentPhaseIdx = 0;
+  totalElapsed    = 0;
+  totalDuration   = totalSeconds(currentPhases);
+  remainingSec    = currentPhases[0].duration;
+
+  // 타이머 화면 초기 렌더링
+  renderTimerScreen();
+  showScreen('screen-timer');
+
+  // 1초마다 tick
+  timerInterval = setInterval(tick, 1000);
+}
+
+
+/* ====================================================
+   ⑦ 타이머 화면 렌더링
+   ==================================================== */
+
+function renderTimerScreen() {
+  const phase = currentPhases[currentPhaseIdx];
+
+  // 상단 레이블
+  document.getElementById('phase-label').textContent = phase.label;
+  document.getElementById('phase-desc').textContent  = PHASE_LABELS[phase.type] || '';
+
+  // 구간 색상에 따라 레이블 색상 변경
+  // 힌트: 색을 바꾸고 싶으면 아래 색상 코드를 수정하세요
+  const colors = { warmup: '#e8c97a', jog: '#d4845a', walk: '#6aaa8c', cooldown: '#e8c97a' };
+  document.getElementById('phase-label').style.color = colors[phase.type] || '#888';
+
+  // 구간 미니맵 그리기 (처음 한 번만)
+  if (document.getElementById('phase-map').children.length === 0) {
+    buildPhaseMap();
+  }
+  updatePhaseMap();
+
+  // 타이머 숫자 업데이트
+  updateTimerDisplay(remainingSec);
+
+  // 전체 진행 바
+  const pct = (totalElapsed / totalDuration) * 100;
+  document.getElementById('progress-fill').style.width = `${pct}%`;
+  document.getElementById('total-time-label').textContent =
+    `총 ${Math.round(totalDuration / 60)}분`;
+
+  // 마지막 구간 완료 버튼
+  const isLast = currentPhaseIdx === currentPhases.length - 1 && remainingSec <= 0;
+  document.getElementById('btn-finish').classList.toggle('hidden', !isLast);
+}
+
+// 구간 미니맵 칩 생성
+function buildPhaseMap() {
+  const map = document.getElementById('phase-map');
+  map.innerHTML = '';
+  currentPhases.forEach((p, i) => {
+    const chip = document.createElement('div');
+    chip.className = `phase-chip ${PHASE_CHIP_CLASS[p.type] || ''}`;
+    chip.id = `chip-${i}`;
+    // 칩 너비를 구간 길이에 비례하게 (시각적 표현)
+    // 최대 60px, 최소 16px 사이에서 비례
+    const ratio = p.duration / totalDuration;
+    chip.style.flex = ratio * 10;
+    map.appendChild(chip);
+  });
+}
+
+// 현재 구간 강조
+function updatePhaseMap() {
+  currentPhases.forEach((_, i) => {
+    const chip = document.getElementById(`chip-${i}`);
+    if (!chip) return;
+    chip.classList.remove('active', 'done');
+    if (i < currentPhaseIdx)      chip.classList.add('done');
+    else if (i === currentPhaseIdx) chip.classList.add('active');
+  });
+}
+
+// 타이머 숫자 포맷팅 (초 → MM:SS)
+function updateTimerDisplay(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  document.getElementById('timer-min').textContent = String(m).padStart(2, '0');
+  document.getElementById('timer-sec').textContent = String(s).padStart(2, '0');
+}
+
+
+/* ====================================================
+   ⑧ 타이머 틱 (매초 호출)
+   ==================================================== */
+
+function tick() {
+  remainingSec--;
+  totalElapsed++;
+
+  // 현재 구간 남은 시간이 0이 되면 다음 구간으로
+  if (remainingSec <= 0) {
+    currentPhaseIdx++;
+
+    // 모든 구간 완료 → 완료 버튼 표시
+    if (currentPhaseIdx >= currentPhases.length) {
+      clearInterval(timerInterval);
+      currentPhaseIdx = currentPhases.length - 1; // 인덱스 초과 방지
+      remainingSec = 0;
+      renderTimerScreen();
+      document.getElementById('btn-finish').classList.remove('hidden');
+
+      // 진동 알림 (지원하는 기기에서)
+      vibrate([200, 100, 200]);
+      return;
+    }
+
+    // 다음 구간 시작 알림 진동
+    vibrate([100]);
+    remainingSec = currentPhases[currentPhaseIdx].duration;
+  }
+
+  renderTimerScreen();
+}
+
+// 진동 유틸 (지원하지 않는 브라우저는 조용히 무시)
+function vibrate(pattern) {
+  if (navigator.vibrate) {
+    navigator.vibrate(pattern);
+  }
+}
+
+
+/* ====================================================
+   ⑨ 운동 완료 처리
+   ==================================================== */
+
+function finishWorkout() {
+  clearInterval(timerInterval);
+  markDayComplete(STATE.currentDay);
+}
+
+// 특정 일차를 완료 처리
+function markDayComplete(day) {
+  // 이미 완료한 날은 중복 추가 안 함
+  if (!STATE.completedDays.includes(day)) {
+    STATE.completedDays.push(day);
+  }
+
+  // 7일 모두 완료했으면 완주 화면
+  if (STATE.completedDays.length >= 7) {
+    saveState(STATE);
+    showScreen('screen-complete');
+    return;
+  }
+
+  // 다음 날로 이동
+  STATE.currentDay = day + 1;
+  saveState(STATE);
+  renderHome();
+}
+
+// 회복일 완료 버튼
+function markRestDone() {
+  markDayComplete(STATE.currentDay);
+}
+
+
+/* ====================================================
+   ⑩ 뒤로가기 (타이머 → 홈)
+   ==================================================== */
+
+function goBack() {
+  // 타이머 중지
+  clearInterval(timerInterval);
+  timerInterval = null;
+
+  // 미니맵 초기화 (다음 번에 다시 그리기 위해)
+  document.getElementById('phase-map').innerHTML = '';
+
+  // 홈으로 돌아가기
+  renderHome();
+}
+
+
+/* ====================================================
+   ⑪ 앱 초기화 (처음부터 다시 시작)
+   ==================================================== */
+
+function resetApp() {
+  // localStorage 삭제 후 초기 상태로
+  localStorage.removeItem(APP_KEY);
+  STATE = loadState();
+  renderHome();
+}
+
+
+/* ====================================================
+   ⑫ 앱 진입점 — 페이지 로드 시 실행
+   ==================================================== */
+(function init() {
+  // 7일 모두 완료한 상태면 완주 화면으로
+  if (STATE.completedDays.length >= 7) {
+    showScreen('screen-complete');
+  } else {
+    renderHome();
+  }
+})();
