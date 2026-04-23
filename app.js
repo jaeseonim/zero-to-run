@@ -487,6 +487,10 @@ function markRestDone() {
    ==================================================== */
 
 function goBack() {
+  // 확인 팝업 — 취소하면 그냥 타이머 계속 진행
+  const confirmed = confirm('운동을 중단할까요?\n나가면 오늘 진행이 초기화돼요.');
+  if (!confirmed) return;
+
   // 타이머 중지
   clearInterval(timerInterval);
   timerInterval = null;
