@@ -279,23 +279,76 @@ function drawTrack(currentDay, completedDays) {
     const labelClass  = isDone ? 'dot-label-done' : (isToday ? 'dot-label-today' : 'dot-label-future');
     const r = isToday ? 20 : 16;  // 오늘은 조금 더 크게
 
+    // 원과 텍스트를 그룹으로 묶어서 클릭 이벤트 달기
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('style', 'cursor: pointer;');
+    group.addEventListener('click', () => showDayCard(dayNum));
+
     // 원 추가
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', x.toFixed(1));
     circle.setAttribute('cy', y.toFixed(1));
     circle.setAttribute('r', r);
     circle.setAttribute('class', circleClass);
-    dotsG.appendChild(circle);
+    group.appendChild(circle);
 
     // 숫자 레이블 추가
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.setAttribute('x', x.toFixed(1));
-    text.setAttribute('y', (y + 4).toFixed(1));  // 수직 중앙 정렬 보정
+    text.setAttribute('y', (y + 4).toFixed(1));
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('class', labelClass);
     text.setAttribute('font-weight', isToday ? '700' : '400');
     text.textContent = isDone ? '✓' : dayNum;
-    dotsG.appendChild(text);
+    group.appendChild(text);
+
+    dotsG.appendChild(group);
+  }
+}
+
+// 날짜 점 클릭 시 해당 일차 정보를 카드에 표시
+function showDayCard(dayNum) {
+  const plan     = CURRICULUM[dayNum - 1];
+  const isDone   = STATE.completedDays.includes(dayNum);
+  const isToday  = dayNum === STATE.currentDay && !isDone;
+  const isLocked = dayNum > STATE.currentDay; // 아직 안 열린 날
+
+  // 완료 카드 숨기고 오늘 카드 보이기
+  document.getElementById('done-card').classList.add('hidden');
+  document.getElementById('today-card').classList.remove('hidden');
+
+  // 제목
+  const statusEmoji = isDone ? '✓ ' : (isLocked ? '🔒 ' : '');
+  document.getElementById('today-title').textContent =
+    `${statusEmoji}${dayNum}일차 — ${plan.title}`;
+
+  // 메타 정보
+  if (plan.type === 'rest') {
+    document.getElementById('today-meta').textContent = '회복일 🌿\n가벼운 산책 15~20분';
+  } else {
+    const mins     = Math.round(totalSeconds(plan.phases) / 60);
+    const jogCount = plan.phases.filter(p => p.type === 'jog').length;
+    const jogSec   = plan.phases.find(p => p.type === 'jog')?.duration || 0;
+    const walkSec  = plan.phases.find(p => p.type === 'walk')?.duration || 0;
+    document.getElementById('today-meta').textContent =
+      `총 ${mins}분 · 조깅 ${jogSec}초 × ${jogCount}회\n걷기 ${walkSec}초 × ${jogCount}회`;
+  }
+
+  // 버튼 처리
+  const btn = document.getElementById('btn-start');
+  if (isDone) {
+    btn.textContent = '완료한 날이에요 ✓';
+    btn.disabled = true;
+    btn.style.opacity = '0.4';
+  } else if (isLocked) {
+    btn.textContent = `${STATE.currentDay}일차를 먼저 완료해야 해요`;
+    btn.disabled = true;
+    btn.style.opacity = '0.4';
+  } else {
+    // 오늘 (시작 가능)
+    btn.textContent = plan.type === 'rest' ? '회복일 보기 →' : '시작하기 →';
+    btn.disabled = false;
+    btn.style.opacity = '1';
   }
 }
 
