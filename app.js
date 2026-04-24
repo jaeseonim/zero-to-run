@@ -171,7 +171,41 @@ let STATE = loadState();
 
 
 /* ====================================================
-   ③ 타이머 전역 변수
+   ③ 화면 꺼짐 방지 (Wake Lock)
+   ==================================================== */
+let wakeLock = null;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (err) {
+    // 지원하지 않거나 권한 없을 때 조용히 무시
+    console.log('Wake Lock 사용 불가:', err);
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release();
+    wakeLock = null;
+  }
+}
+
+// 앱으로 다시 돌아왔을 때 Wake Lock 자동 재요청
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock === null && document.visibilityState === 'visible') {
+    // 타이머가 실행 중일 때만 재요청
+    if (timerInterval !== null) {
+      await requestWakeLock();
+    }
+  }
+});
+
+
+/* ====================================================
+   ④ 타이머 전역 변수
    ==================================================== */
 let timerInterval   = null;   // setInterval 핸들러
 let currentPhaseIdx = 0;      // 현재 구간 인덱스
@@ -233,10 +267,7 @@ function renderHome() {
       document.getElementById('today-meta').textContent = '오늘은 회복일이에요 🌿\n가벼운 산책 15~20분';
       document.getElementById('btn-start').textContent = '회복일 보기 →';
     } else {
-      const mins = Math.round(totalSeconds(plan.phases) / 60);
-      const jogCount = plan.phases.filter(p => p.type === 'jog').length;
-      document.getElementById('today-meta').textContent =
-        `총 ${mins}분 · 조깅 ${jogCount}회`;
+      document.getElementById('today-meta').textContent = buildWorkoutMeta(plan);
       document.getElementById('btn-start').textContent = '시작하기 →';
     }
   }
@@ -326,12 +357,7 @@ function showDayCard(dayNum) {
   if (plan.type === 'rest') {
     document.getElementById('today-meta').textContent = '회복일 🌿\n가벼운 산책 15~20분';
   } else {
-    const mins     = Math.round(totalSeconds(plan.phases) / 60);
-    const jogCount = plan.phases.filter(p => p.type === 'jog').length;
-    const jogSec   = plan.phases.find(p => p.type === 'jog')?.duration || 0;
-    const walkSec  = plan.phases.find(p => p.type === 'walk')?.duration || 0;
-    document.getElementById('today-meta').textContent =
-      `총 ${mins}분 · 조깅 ${jogSec}초 × ${jogCount}회\n걷기 ${walkSec}초 × ${jogCount}회`;
+    document.getElementById('today-meta').textContent = buildWorkoutMeta(plan);
   }
 
   // 버튼 처리
@@ -355,6 +381,23 @@ function showDayCard(dayNum) {
 // 구간 배열의 총 초 계산 (오늘 카드 메타 정보에 사용)
 function totalSeconds(phases) {
   return phases.reduce((sum, p) => sum + p.duration, 0);
+}
+
+// 초 → 읽기 쉬운 시간 포맷 (예: 60→"1분", 90→"1분 30초", 45→"45초")
+function fmtSec(sec) {
+  if (sec < 60) return `${sec}초`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s === 0 ? `${m}분` : `${m}분 ${s}초`;
+}
+
+// 운동 메타 텍스트 생성 (홈 카드 + 날짜 점 클릭 공통 사용)
+function buildWorkoutMeta(plan) {
+  const mins     = Math.round(totalSeconds(plan.phases) / 60);
+  const jogCount = plan.phases.filter(p => p.type === 'jog').length;
+  const jogSec   = plan.phases.find(p => p.type === 'jog')?.duration || 0;
+  const walkSec  = plan.phases.find(p => p.type === 'walk')?.duration || 0;
+  return `총 ${mins}분 · ${jogCount}세트 (조깅 ${fmtSec(jogSec)} + 걷기 ${fmtSec(walkSec)})`;
 }
 
 
@@ -381,6 +424,9 @@ function startWorkout() {
   // 타이머 화면 초기 렌더링
   renderTimerScreen();
   showScreen('screen-timer');
+
+  // 화면 꺼짐 방지
+  requestWakeLock();
 
   // 1초마다 tick
   timerInterval = setInterval(tick, 1000);
@@ -506,6 +552,7 @@ function vibrate(pattern) {
 
 function finishWorkout() {
   clearInterval(timerInterval);
+  releaseWakeLock();
   markDayComplete(STATE.currentDay);
 }
 
@@ -547,6 +594,7 @@ function goBack() {
   // 타이머 중지
   clearInterval(timerInterval);
   timerInterval = null;
+  releaseWakeLock();
 
   // 미니맵 초기화 (다음 번에 다시 그리기 위해)
   document.getElementById('phase-map').innerHTML = '';
