@@ -145,7 +145,38 @@ const PHASE_LABELS = {
 
 
 /* ====================================================
-   ② 앱 상태 (메모리 + localStorage 동기화)
+   ② 운동 진행 상태 저장/복원 (새로고침 대비)
+   ==================================================== */
+
+const WORKOUT_KEY = APP_KEY + '_workout';
+
+// 현재 구간 인덱스를 localStorage에 저장 (구간이 바뀔 때마다 호출)
+function saveWorkoutProgress(day, phaseIdx) {
+  const today = new Date().toISOString().slice(0, 10); // "2026-04-24"
+  localStorage.setItem(WORKOUT_KEY, JSON.stringify({ day, phaseIdx, date: today }));
+}
+
+// 운동 완료 또는 나가기 시 저장값 삭제
+function clearWorkoutProgress() {
+  localStorage.removeItem(WORKOUT_KEY);
+}
+
+// 저장된 진행값 불러오기 (오늘 날짜 것만 유효)
+function loadWorkoutProgress() {
+  const saved = localStorage.getItem(WORKOUT_KEY);
+  if (!saved) return null;
+  const data = JSON.parse(saved);
+  const today = new Date().toISOString().slice(0, 10);
+  if (data.date !== today) {
+    clearWorkoutProgress(); // 날짜 다르면 버림
+    return null;
+  }
+  return data;
+}
+
+
+/* ====================================================
+   ③ 앱 상태 (메모리 + localStorage 동기화)
    ==================================================== */
 
 // localStorage에서 불러오기. 없으면 초기값으로 세팅.
@@ -171,7 +202,7 @@ let STATE = loadState();
 
 
 /* ====================================================
-   ③ 화면 꺼짐 방지 (Wake Lock)
+   ④ 화면 꺼짐 방지 (Wake Lock)
    ==================================================== */
 let wakeLock = null;
 
@@ -421,6 +452,9 @@ function startWorkout() {
   totalDuration   = totalSeconds(currentPhases);
   remainingSec    = currentPhases[0].duration;
 
+  // 진행 상태 저장 시작
+  saveWorkoutProgress(STATE.currentDay, 0);
+
   // 타이머 화면 초기 렌더링
   renderTimerScreen();
   showScreen('screen-timer');
@@ -533,6 +567,8 @@ function tick() {
     // 다음 구간 시작 알림 진동
     vibrate([100]);
     remainingSec = currentPhases[currentPhaseIdx].duration;
+    // 새 구간 저장
+    saveWorkoutProgress(STATE.currentDay, currentPhaseIdx);
   }
 
   renderTimerScreen();
@@ -553,6 +589,7 @@ function vibrate(pattern) {
 function finishWorkout() {
   clearInterval(timerInterval);
   releaseWakeLock();
+  clearWorkoutProgress();
   markDayComplete(STATE.currentDay);
 }
 
@@ -595,6 +632,7 @@ function goBack() {
   clearInterval(timerInterval);
   timerInterval = null;
   releaseWakeLock();
+  clearWorkoutProgress();
 
   // 미니맵 초기화 (다음 번에 다시 그리기 위해)
   document.getElementById('phase-map').innerHTML = '';
@@ -620,6 +658,41 @@ function resetApp() {
    ⑫ 앱 진입점 — 페이지 로드 시 실행
    ==================================================== */
 (function init() {
+  // 새로고침 전 운동 진행 중이었는지 확인
+  const progress = loadWorkoutProgress();
+  if (
+    progress &&
+    progress.day === STATE.currentDay &&
+    !STATE.completedDays.includes(progress.day)
+  ) {
+    const plan = CURRICULUM[progress.day - 1];
+    if (plan && plan.type === 'workout') {
+      const phase = plan.phases[progress.phaseIdx];
+      const resume = confirm(
+        `이전에 ${progress.day}일차 운동 중이었어요.\n` +
+        `"${phase?.label || ''}" 구간부터 이어서 할까요?`
+      );
+      if (resume) {
+        // 타이머 상태 복원
+        currentPhases   = plan.phases;
+        currentPhaseIdx = progress.phaseIdx;
+        totalDuration   = totalSeconds(currentPhases);
+        remainingSec    = currentPhases[currentPhaseIdx].duration;
+        totalElapsed    = currentPhases
+          .slice(0, currentPhaseIdx)
+          .reduce((s, p) => s + p.duration, 0);
+
+        renderTimerScreen();
+        showScreen('screen-timer');
+        requestWakeLock();
+        timerInterval = setInterval(tick, 1000);
+        return;
+      } else {
+        clearWorkoutProgress();
+      }
+    }
+  }
+
   // 7일 모두 완료한 상태면 완주 화면으로
   if (STATE.completedDays.length >= 7) {
     showScreen('screen-complete');
