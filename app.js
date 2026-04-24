@@ -145,7 +145,41 @@ const PHASE_LABELS = {
 
 
 /* ====================================================
-   ② 운동 진행 상태 저장/복원 (새로고침 대비)
+   ② 테마 (라이트 / 다크 / 자동)
+   ==================================================== */
+
+const THEME_KEY = APP_KEY + '_theme';
+
+// 테마 적용: 'light' | 'dark' | 'auto'
+function applyTheme(theme) {
+  const html = document.documentElement;
+  if (theme === 'auto') {
+    html.removeAttribute('data-theme');
+  } else {
+    html.setAttribute('data-theme', theme);
+  }
+  // 버튼 아이콘 업데이트
+  const btn = document.getElementById('btn-theme');
+  if (btn) {
+    btn.textContent = { light: '☀️', dark: '🌙', auto: '🌓' }[theme];
+    btn.title       = { light: '라이트 모드 (탭해서 변경)', dark: '다크 모드 (탭해서 변경)', auto: '시스템 설정 따라감 (탭해서 변경)' }[theme];
+  }
+  localStorage.setItem(THEME_KEY, theme);
+}
+
+// 버튼 클릭 시 순환: 자동 → 다크 → 라이트 → 자동
+function toggleTheme() {
+  const current = localStorage.getItem(THEME_KEY) || 'auto';
+  const next = { auto: 'dark', dark: 'light', light: 'auto' }[current];
+  applyTheme(next);
+}
+
+// 저장된 테마 즉시 적용 (페이지 로드 시 깜빡임 방지)
+applyTheme(localStorage.getItem(THEME_KEY) || 'auto');
+
+
+/* ====================================================
+   ③ 운동 진행 상태 저장/복원 (새로고침 대비)
    ==================================================== */
 
 const WORKOUT_KEY = APP_KEY + '_workout';
