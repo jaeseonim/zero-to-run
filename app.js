@@ -364,7 +364,7 @@ function drawTrack(currentDay, completedDays) {
   // 완료된 날만큼 원호 길이 계산
   const completedCount = completedDays.length;
   const arcLen = (completedCount / 7) * perimeter;
-  progressEl.setAttribute('stroke-dasharray', `${arcLen} ${perimeter}`);
+  progressEl.setAttribute('stroke-dasharray', `${arcLen} 9999`);
 
   // 기존 점 초기화
   dotsG.innerHTML = '';

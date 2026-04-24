@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>첫 발걸음 — 7일 런닝 프로그램</title>
-  <link rel="stylesheet" href="style.css?v=8" />
+  <link rel="stylesheet" href="style.css?v=9" />
 </head>
 <body>
 
@@ -25,12 +25,12 @@
       <svg id="track-svg" viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
         <!-- 트랙 배경 원 -->
         <ellipse id="track-bg" cx="160" cy="160" rx="130" ry="110" fill="none" stroke="#e8e0d4" stroke-width="28"/>
-        <!-- 완료된 진행 원호 (JS가 업데이트함) -->
-        <ellipse id="track-progress" cx="160" cy="160" rx="130" ry="110"
+        <!-- 완료된 진행 원호 (꼭대기 12시에서 시작, JS가 업데이트함) -->
+        <path id="track-progress"
+          d="M 160,50 A 130,110 0 0,1 290,160 A 130,110 0 0,1 160,270 A 130,110 0 0,1 30,160 A 130,110 0 0,1 160,50"
           fill="none" stroke="#c8a96e" stroke-width="28"
           stroke-dasharray="0 9999"
-          stroke-linecap="round"
-          transform="rotate(-90 160 160)"/>
+          stroke-linecap="round"/>
         <!-- 중앙 텍스트 -->
         <text id="track-day-num" x="160" y="148" text-anchor="middle"
           font-size="52" font-weight="700" fill="#2a2a2a" font-family="'Noto Serif KR', serif">1</text>
@@ -122,6 +122,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>
