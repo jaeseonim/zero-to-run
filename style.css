@@ -43,7 +43,7 @@
   }
 }
 
-/* 수동으로 다크 강제 */
+/* 다크모드 */
 [data-theme="dark"] {
   --bg:        #1a1612;
   --surface:   #252018;
@@ -52,14 +52,10 @@
   --border:    #3a3028;
 }
 
-/* 수동으로 라이트 강제 (시스템이 다크여도 무시) */
-[data-theme="light"] {
-  --bg:        #f5f0e8;
-  --surface:   #fffdf8;
-  --text:      #2a2220;
-  --text-muted:#8a7e78;
-  --border:    #e0d8cc;
-}
+/* 다크모드일 때 SVG 하드코딩 색상 오버라이드 */
+[data-theme="dark"] #track-bg        { stroke: var(--border); }
+[data-theme="dark"] #track-day-num   { fill: var(--text); }
+[data-theme="dark"] #track-day-label { fill: var(--text-muted); }
 
 html, body {
   height: 100%;
