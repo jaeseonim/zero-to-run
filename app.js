@@ -127,6 +127,17 @@ const CURRICULUM = [
   },
 ];
 
+// 일차별 명언
+const QUOTES = [
+  { text: "우사인볼트가 세계에서 왜 제일 달리기 빠른 사람인지 알아요? 끝까지 갔기 때문이예요.", author: "Swings" },
+  { text: "늦었다고 생각할 때가 진짜 너무 늦었다. 그러니 지금 당장 시작해라.", author: "박명수" },
+  { text: "인간에게는 한계가 없다.", author: "엘리우드 킵초게" },
+  { text: "운동은 끝나고 먹는 것까지가 운동이다.", author: "김종국" },
+  { text: "동기부여가 당신을 시작하게 한다면, 습관은 당신을 계속 나아가게 만든다.", author: "짐 런" },
+  { text: "고통은 피할 수 없지만, 괴로워할지 말지는 본인의 선택이다.", author: "무라카미 하루키" },
+  { text: "나는 9초를 달리기 위해 4년을 훈련했다. 사람들은 2달 해보고 결과가 안 나온다고 포기한다.", author: "우사인 볼트" },
+];
+
 // 구간 타입별 색상 (CSS 클래스와 대응)
 const PHASE_CHIP_CLASS = {
   warmup:   'chip-warmup',
@@ -142,6 +153,15 @@ const PHASE_LABELS = {
   walk:     '걷기 — 숨 고르기',
   cooldown: '쿨다운 — 마무리 스트레칭',
 };
+
+
+// 타이머 화면에 오늘 명언 표시
+function showQuote(day) {
+  const quote = QUOTES[day - 1];
+  if (!quote) return;
+  document.getElementById('quote-text').textContent   = `"${quote.text}"`;
+  document.getElementById('quote-author').textContent = `— ${quote.author}`;
+}
 
 
 /* ====================================================
@@ -484,6 +504,7 @@ function startWorkout() {
 
   // 타이머 화면 초기 렌더링
   renderTimerScreen();
+  showQuote(STATE.currentDay);
   showScreen('screen-timer');
 
   // 화면 꺼짐 방지
@@ -710,6 +731,7 @@ function resetApp() {
           .reduce((s, p) => s + p.duration, 0);
 
         renderTimerScreen();
+        showQuote(progress.day);
         showScreen('screen-timer');
         requestWakeLock();
         timerInterval = setInterval(tick, 1000);
