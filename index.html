@@ -6,39 +6,32 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>첫 발걸음 — 7일 런닝 프로그램</title>
-  <link rel="stylesheet" href="style.css?v=10" />
+  <title>첫 발걸음 — 5K 완주 프로그램</title>
+  <link rel="stylesheet" href="style.css?v=30" />
 </head>
 <body>
 
-  <!-- ===== 화면 1: 홈 (운동장 뷰) ===== -->
+  <!-- ===== 화면 1: 홈 ===== -->
   <div id="screen-home" class="screen active">
     <header class="home-header">
-      <button id="btn-theme" class="btn-theme" onclick="toggleTheme()" title="테마 변경">🌓</button>
+      <button class="btn-theme" onclick="toggleTheme()" title="테마 변경">☀️</button>
       <p class="app-label">첫 발걸음</p>
-      <h1 class="home-title">7일 완주</h1>
-      <p class="home-sub">매일 한 바퀴, 천천히 시작해요</p>
+      <h1 class="home-title">5K 완주</h1>
+      <p class="home-sub">9주, 주 3회 — 천천히, 확실하게</p>
+      <div class="home-progress-row">
+        <span id="home-week-label" class="home-week-label">1주차</span>
+        <span id="home-progress-label" class="home-progress-label">0 / 27 완료</span>
+      </div>
     </header>
 
-    <!-- 운동장형 진행 트랙 -->
-    <div class="track-container">
-      <svg id="track-svg" viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
-        <!-- 트랙 배경 원 -->
-        <ellipse id="track-bg" cx="160" cy="160" rx="130" ry="110" fill="none" stroke="#e8e0d4" stroke-width="28"/>
-        <!-- 완료된 진행 원호 (꼭대기 12시에서 시작, JS가 업데이트함) -->
-        <path id="track-progress"
-          d="M 160,50 A 130,110 0 0,1 290,160 A 130,110 0 0,1 160,270 A 130,110 0 0,1 30,160 A 130,110 0 0,1 160,50"
-          fill="none" stroke="#c8a96e" stroke-width="28"
-          stroke-dasharray="0 9999"
-          stroke-linecap="round"/>
-        <!-- 중앙 텍스트 -->
-        <text id="track-day-num" x="160" y="148" text-anchor="middle"
-          font-size="52" font-weight="700" fill="#2a2a2a" font-family="'Noto Serif KR', serif">1</text>
-        <text id="track-day-label" x="160" y="178" text-anchor="middle"
-          font-size="14" fill="#888" font-family="'Noto Sans KR', sans-serif">일차</text>
-        <!-- 7개 날짜 점 (JS가 생성함) -->
-        <g id="track-dots"></g>
-      </svg>
+    <!-- Wake Lock 안내 -->
+    <div class="wakelock-tip">
+      💡 운동 중 화면이 꺼지지 않도록 화면 자동 잠금을 1시간으로 설정해두세요
+    </div>
+
+    <!-- 9주 × 3회 그리드 -->
+    <div class="week-grid-wrap">
+      <div id="week-grid" class="week-grid"></div>
     </div>
 
     <!-- 오늘 카드 -->
@@ -49,7 +42,7 @@
       <button id="btn-start" class="btn-primary" onclick="startWorkout()">시작하기 →</button>
     </div>
 
-    <!-- 완료 상태일 때 -->
+    <!-- 완료 상태 카드 -->
     <div id="done-card" class="done-card hidden">
       <div class="done-icon">✓</div>
       <div class="done-text">오늘 완료!</div>
@@ -58,9 +51,12 @@
   </div>
 
 
-  <!-- ===== 화면 2: 타이머 (운동 진행) ===== -->
+  <!-- ===== 화면 2: 타이머 ===== -->
   <div id="screen-timer" class="screen">
-    <button class="btn-back" onclick="goBack()">← 나가기</button>
+    <div class="timer-topbar">
+      <button class="btn-back" onclick="goBack()">← 나가기</button>
+      <button class="btn-theme" onclick="toggleTheme()" title="테마 변경">☀️</button>
+    </div>
 
     <div class="timer-phase-label" id="phase-label">준비</div>
     <div class="timer-display">
@@ -82,46 +78,71 @@
       </div>
     </div>
 
-    <!-- 오늘의 명언 -->
-    <div class="workout-quote">
-      <p id="quote-text" class="quote-text"></p>
-      <p id="quote-author" class="quote-author"></p>
-    </div>
-
     <button id="btn-finish" class="btn-primary hidden" onclick="finishWorkout()">완료 →</button>
-  </div>
 
-
-  <!-- ===== 화면 3: 회복일 ===== -->
-  <div id="screen-rest" class="screen">
-    <div class="rest-content">
-      <div class="rest-icon">🌿</div>
-      <h2 class="rest-title">오늘은 쉬어도 돼요</h2>
-      <p class="rest-desc">
-        몸이 성장하는 건 운동할 때가 아니라<br/>
-        쉬는 동안이에요.<br/><br/>
-        원한다면 가볍게 15~20분 산책해요.<br/>
-        뛰지 않아도 충분히 잘하고 있어요.
-      </p>
-      <div class="rest-tip">💡 내일이 진짜 도약의 날이에요</div>
-      <button class="btn-primary" onclick="markRestDone()">오늘 완료로 표시하기</button>
+    <!-- 워밍업 런닝 팁 (워밍업 구간에서만 표시) -->
+    <div id="running-tips" class="running-tips hidden">
+      <div class="tips-title">🏃 런닝 초보자를 위한 팁</div>
+      <div class="tip-item">🧍 <span>허리를 세우고, 앞으로 살짝 기울어요</span></div>
+      <div class="tip-item">💨 <span>코와 입 동시에 깊게 들이마시고 짧게 내뱉어요</span></div>
+      <div class="tip-item">💪 <span>팔은 몸에 가깝게, 주먹은 배꼽 앞으로</span></div>
     </div>
   </div>
 
 
-  <!-- ===== 화면 4: 7일 완주 ===== -->
+  <!-- ===== 화면 4: 피드백 ===== -->
+  <div id="screen-feedback" class="screen">
+    <div class="feedback-content">
+      <div class="feedback-badge">🎉</div>
+      <h2 class="feedback-title" id="feedback-title">주차 완료!</h2>
+      <p class="feedback-sub">이번 주차 어땠나요?</p>
+
+      <div class="feedback-buttons">
+        <button class="btn-feedback btn-hard" onclick="handleFeedback('hard')">
+          <span class="feedback-emoji">😤</span>
+          <span class="feedback-label">힘들었어요</span>
+        </button>
+        <button class="btn-feedback btn-ok" onclick="handleFeedback('ok')">
+          <span class="feedback-emoji">😊</span>
+          <span class="feedback-label">적당했어요</span>
+        </button>
+        <button class="btn-feedback btn-easy" onclick="handleFeedback('easy')">
+          <span class="feedback-emoji">😎</span>
+          <span class="feedback-label">쉬웠어요</span>
+        </button>
+      </div>
+
+      <!-- 힘들었어요 확인 메시지 -->
+      <div id="feedback-hard-confirm" class="feedback-confirm hidden">
+        <p class="confirm-msg" id="confirm-msg"></p>
+        <p class="confirm-sub">반복하는 게 오히려 더 단단한 기초가 돼요 💪</p>
+        <div class="confirm-btns">
+          <button class="btn-primary" onclick="confirmRepeat()">네, 다시 할게요</button>
+          <button class="btn-secondary" onclick="handleFeedback('ok')">아니요, 다음으로</button>
+        </div>
+      </div>
+
+      <!-- 쉬웠어요 경고 메시지 -->
+      <div id="feedback-easy-warning" class="feedback-warning hidden">
+        <p>쉽게 느껴지더라도 몸은 아직 적응 중이에요.<br/>무리하면 부상으로 이어질 수 있어요.</p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== 화면 5: 9주 완주 ===== -->
   <div id="screen-complete" class="screen">
     <div class="complete-content">
       <div class="complete-badge">🏅</div>
-      <h2 class="complete-title">7일 완주!</h2>
+      <h2 class="complete-title">5K 완주!</h2>
       <p class="complete-desc">
-        처음 시작한 것 자체가 대단해요.<br/>
-        습관의 씨앗이 심어졌어요.
+        9주를 해냈어요.<br/>
+        이제 당신은 런너입니다.
       </p>
-      <button class="btn-secondary" onclick="resetApp()">다시 시작하기</button>
+      <button class="btn-secondary" onclick="resetApp()">처음부터 다시 시작하기</button>
     </div>
   </div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=31"></script>
 </body>
 </html>
