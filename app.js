@@ -1,11 +1,18 @@
 /* ====================================================
-   app.js — 첫 발걸음 런닝 앱 (C25K 9주 버전)
+   app.js — 첫 발걸음 런닝 앱 (C25K 9주 버전 / v2)
    기술 스택: Vanilla JavaScript + localStorage
+   ----------------------------------------------------
+   v2 변경 사항
+   - 타이머: Date.now() 기반으로 재작성 (백그라운드/throttling 대응)
+   - Wake Lock API 자동 적용 (운동 중 화면 꺼짐 방지)
+   - CURRICULUM: 헬퍼 함수로 압축 (700줄 → 30줄)
+   - 전역 변수 → Workout 객체로 통합
+   - 1주차 인터벌 8세트 → 6세트로 완화 (첫날 부담 축소)
    ==================================================== */
 
 
 /* ====================================================
-   ① 설정값 모음
+   ① 설정값 + 커리큘럼 빌더
    ==================================================== */
 
 const APP_KEY = 'firststep_c25k';
@@ -15,439 +22,73 @@ const APP_KEY = 'firststep_c25k';
 // 앱 출시 시: true 로 바꾸면 순서대로만 진행 가능
 const LOCK_ENABLED = false;
 
-// C25K 9주 커리큘럼 (공식 c25k.com 기반)
-// 구조: 9주 × 주 3회 = 27 세션
-// 각 세션: warmup(5분 워킹) + 인터벌 구간들 + cooldown(5분 워킹)
+const WARMUP_SEC   = 5 * 60;
+const COOLDOWN_SEC = 5 * 60;
+
+// 인터벌 세션 빌더: 워밍업 + (조깅 + 걷기) × repeats + 쿨다운
+function intervalSession(week, session, jogSec, walkSec, repeats) {
+  const phases = [{ label: '워밍업', type: 'warmup', duration: WARMUP_SEC }];
+  for (let i = 0; i < repeats; i++) {
+    phases.push({ label: '조깅', type: 'jog',  duration: jogSec });
+    phases.push({ label: '걷기', type: 'walk', duration: walkSec });
+  }
+  phases.push({ label: '쿨다운', type: 'cooldown', duration: COOLDOWN_SEC });
+  return { week, session, title: '', type: 'workout', phases };
+}
+
+// 자유 구성 세션 빌더: 워밍업 + [임의 phases] + 쿨다운
+function customSession(week, session, mid) {
+  return {
+    week, session, title: '', type: 'workout',
+    phases: [
+      { label: '워밍업', type: 'warmup', duration: WARMUP_SEC },
+      ...mid,
+      { label: '쿨다운', type: 'cooldown', duration: COOLDOWN_SEC },
+    ],
+  };
+}
+
+// 헬퍼: 조깅/걷기 phase 생성
+const jog  = (sec) => ({ label: '조깅', type: 'jog',  duration: sec });
+const walk = (sec) => ({ label: '걷기', type: 'walk', duration: sec });
+
+// 같은 세션 3회 반복용
+function repeatThree(week, build) {
+  return [1, 2, 3].map(s => build(week, s));
+}
+
+// ── C25K 9주 커리큘럼 ──────────────────────────────────
+// 공식 c25k.com 기반. 단, 1주차는 8세트 → 6세트로 완화.
+// 1주차 1~3회차: 조깅 60s + 걷기 90s × 6 (총 ~25분)
 const CURRICULUM = [
-  // ── 1주차 ──────────────────────────────────────────
-  // 조깅 1분 + 걷기 1분30초 반복 × 8 (총 20분)
-  {
-    week: 1, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 1, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 1, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-
-  // ── 2주차 ──────────────────────────────────────────
-  // 조깅 1분30초 + 걷기 2분 반복 × 6 (총 20분)
-  {
-    week: 2, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 2, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 2, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 2 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-
-  // ── 3주차 ──────────────────────────────────────────
-  // 2세트: 조깅90초 + 걷기90초 + 조깅3분 + 걷기3분
-  {
-    week: 3, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 3, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 3, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 90 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-
-  // ── 4주차 ──────────────────────────────────────────
-  // 조깅3분 + 걷기90초 + 조깅5분 + 걷기2분30초 + 조깅3분 + 걷기90초 + 조깅5분
-  {
-    week: 4, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 150 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 4, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 150 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 4, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 150 },
-      { label: '조깅',        type: 'jog',     duration: 3 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 90 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-
-  // ── 5주차 ──────────────────────────────────────────
-  // 세션1: 조깅5분+걷기3분×3
-  // 세션2: 조깅8분+걷기5분+조깅8분
-  // 세션3: 조깅 20분 (첫 연속 달리기!)
-  {
-    week: 5, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 5, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 8 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 8 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 5, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 20 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-
-  // ── 6주차 ──────────────────────────────────────────
-  // 세션1: 조깅5분+걷기3분+조깅8분+걷기3분+조깅5분
-  // 세션2: 조깅10분+걷기3분+조깅10분
-  // 세션3: 조깅 25분
-  {
-    week: 6, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 8 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 5 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 6, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 10 * 60 },
-      { label: '걷기',        type: 'walk',    duration: 3 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 10 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 6, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 25 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-
-  // ── 7주차 ──────────────────────────────────────────
-  // 세션 모두: 조깅 25분
-  {
-    week: 7, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 25 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 7, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 25 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 7, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 25 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-
-  // ── 8주차 ──────────────────────────────────────────
-  // 세션 모두: 조깅 28분
-  {
-    week: 8, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 28 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 8, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 28 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 8, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 28 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-
-  // ── 9주차 ──────────────────────────────────────────
-  // 세션 모두: 조깅 30분 (= 5K 완주!)
-  {
-    week: 9, session: 1,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 30 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 9, session: 2,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 30 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
-  {
-    week: 9, session: 3,
-    title: '', // ← 원하면 여기에 직접 입력
-    type: 'workout',
-    phases: [
-      { label: '워밍업',    type: 'warmup',  duration: 5 * 60 },
-      { label: '조깅',        type: 'jog',     duration: 30 * 60 },
-      { label: '쿨다운',    type: 'cooldown', duration: 5 * 60 },
-    ],
-  },
+  // 1주차: 조깅 1분 + 걷기 1분30초 × 6 (완화 적용)
+  ...repeatThree(1, (w, s) => intervalSession(w, s, 60, 90, 6)),
+  // 2주차: 조깅 1분30초 + 걷기 2분 × 6
+  ...repeatThree(2, (w, s) => intervalSession(w, s, 90, 120, 6)),
+  // 3주차: 2세트(조깅90초 + 걷기90초 + 조깅3분 + 걷기3분)
+  ...repeatThree(3, (w, s) => customSession(w, s, [
+    jog(90), walk(90), jog(180), walk(180),
+    jog(90), walk(90), jog(180), walk(180),
+  ])),
+  // 4주차: 조깅3분 + 걷기90초 + 조깅5분 + 걷기2분30초 + 조깅3분 + 걷기90초 + 조깅5분
+  ...repeatThree(4, (w, s) => customSession(w, s, [
+    jog(180), walk(90), jog(300), walk(150),
+    jog(180), walk(90), jog(300),
+  ])),
+  // 5주차: 회차별 다름
+  customSession(5, 1, [jog(300), walk(180), jog(300), walk(180), jog(300)]),
+  customSession(5, 2, [jog(480), walk(300), jog(480)]),
+  customSession(5, 3, [jog(20 * 60)]),
+  // 6주차: 회차별 다름
+  customSession(6, 1, [jog(300), walk(180), jog(480), walk(180), jog(300)]),
+  customSession(6, 2, [jog(600), walk(180), jog(600)]),
+  customSession(6, 3, [jog(25 * 60)]),
+  // 7주차: 25분 연속 × 3
+  ...repeatThree(7, (w, s) => customSession(w, s, [jog(25 * 60)])),
+  // 8주차: 28분 연속 × 3
+  ...repeatThree(8, (w, s) => customSession(w, s, [jog(28 * 60)])),
+  // 9주차: 30분 연속 × 3 (= 5K 완주!)
+  ...repeatThree(9, (w, s) => customSession(w, s, [jog(30 * 60)])),
 ];
 
 // 총 세션 수
@@ -478,7 +119,6 @@ const THEME_KEY = APP_KEY + '_theme';
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  // 홈 + 타이머 화면 둘 다 버튼 업데이트
   document.querySelectorAll('.btn-theme').forEach(btn => {
     btn.textContent = theme === 'dark' ? '🌙' : '☀️';
     btn.title = theme === 'dark' ? '다크 모드 (탭해서 라이트로)' : '라이트 모드 (탭해서 다크로)';
@@ -492,8 +132,8 @@ function toggleTheme() {
 
   // 타이머 화면이 열려있으면 배경색도 즉시 갱신
   const timerActive = document.getElementById('screen-timer').classList.contains('active');
-  if (timerActive && currentPhases.length > 0) {
-    applyPhaseBackground(currentPhases[currentPhaseIdx].type);
+  if (timerActive && Workout.phases.length > 0) {
+    applyPhaseBackground(Workout.phases[Workout.phaseIdx].type);
   }
 }
 
@@ -508,7 +148,7 @@ function loadState() {
   const saved = localStorage.getItem(APP_KEY);
   if (saved) return JSON.parse(saved);
   return {
-    currentIdx: 0,          // 현재 세션 인덱스 (0~26)
+    currentIdx: 0,           // 현재 세션 인덱스 (0~26)
     completedIdx: [],        // 완료한 세션 인덱스 배열
   };
 }
@@ -521,14 +161,73 @@ let STATE = loadState();
 
 
 /* ====================================================
-   ③-2 운동 진행 상태 (새로고침 대비)
+   ④ Workout — 운동 진행 상태 통합 객체
+   ----------------------------------------------------
+   타이머는 Date.now() 기반으로 동작.
+   - phaseStartTime: 현재 phase가 시작된 절대 시각 (ms)
+   - 화면 갱신은 1초마다 하지만, 시간 계산은 항상
+     "지금 시각 - 시작 시각"으로 함 → 백그라운드 throttling
+     영향 받지 않음
+   ==================================================== */
+
+const Workout = {
+  // 정적 데이터
+  sessionIdx: 0,
+  phases: [],
+  totalDuration: 0,
+
+  // 진행 상태
+  phaseIdx: 0,
+  phaseStartTime: 0,       // 현재 phase 시작 시각 (Date.now)
+  prevPhasesElapsed: 0,    // 이전 phase들의 누적 시간 (초)
+
+  // 타이머
+  intervalId: null,
+  wakeLock: null,
+
+  // 현재 phase에서 경과한 초
+  phaseElapsedSec() {
+    return Math.floor((Date.now() - this.phaseStartTime) / 1000);
+  },
+
+  // 현재 phase 남은 초 (음수가 될 수 있음 → 다음 phase로 넘어감)
+  phaseRemainingSec() {
+    return this.phases[this.phaseIdx].duration - this.phaseElapsedSec();
+  },
+
+  // 전체 경과 초
+  totalElapsedSec() {
+    return this.prevPhasesElapsed + this.phaseElapsedSec();
+  },
+
+  isLastPhase() {
+    return this.phaseIdx === this.phases.length - 1;
+  },
+
+  isFinished() {
+    return this.isLastPhase() && this.phaseRemainingSec() <= 0;
+  },
+};
+
+
+/* ====================================================
+   ④-2 운동 진행 상태 저장 (새로고침 대비)
+   ----------------------------------------------------
+   sessionStartTime을 저장하면 새로고침 후에도 정확히
+   몇 초 진행됐는지 복원 가능
    ==================================================== */
 
 const WORKOUT_KEY = APP_KEY + '_workout';
 
-function saveWorkoutProgress(idx, phaseIdx) {
-  const today = new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit'});
-  localStorage.setItem(WORKOUT_KEY, JSON.stringify({ idx, phaseIdx, date: today }));
+function saveWorkoutProgress() {
+  const data = {
+    sessionIdx:      Workout.sessionIdx,
+    phaseIdx:        Workout.phaseIdx,
+    phaseStartTime:  Workout.phaseStartTime,
+    prevPhasesElapsed: Workout.prevPhasesElapsed,
+    date: new Date().toLocaleDateString('ko-KR'),
+  };
+  localStorage.setItem(WORKOUT_KEY, JSON.stringify(data));
 }
 
 function clearWorkoutProgress() {
@@ -539,23 +238,51 @@ function loadWorkoutProgress() {
   const saved = localStorage.getItem(WORKOUT_KEY);
   if (!saved) return null;
   const data = JSON.parse(saved);
-  const today = new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit'});
+  const today = new Date().toLocaleDateString('ko-KR');
   if (data.date !== today) { clearWorkoutProgress(); return null; }
   return data;
 }
 
 
 /* ====================================================
-   ④ 타이머 전역 변수 + 구간 배경색
+   ⑤ Wake Lock — 운동 중 화면 꺼짐 방지
+   ----------------------------------------------------
+   iOS Safari 16.4+, Chrome, Edge 지원
+   탭이 다시 visible 되면 자동 재요청
    ==================================================== */
-let timerInterval   = null;
-let currentPhaseIdx = 0;
-let remainingSec    = 0;
-let totalElapsed    = 0;
-let totalDuration   = 0;
-let currentPhases   = [];
 
-// 구간별 배경색 (라이트 / 다크)
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    Workout.wakeLock = await navigator.wakeLock.request('screen');
+    Workout.wakeLock.addEventListener('release', () => {
+      // 시스템이 release 했을 수도 있음
+    });
+  } catch (e) {
+    // 권한 거부 / 배터리 부족 등 — 무시 (사용자가 직접 화면 켜둘 수 있음)
+    console.warn('Wake Lock 실패:', e.message);
+  }
+}
+
+function releaseWakeLock() {
+  if (Workout.wakeLock) {
+    Workout.wakeLock.release().catch(() => {});
+    Workout.wakeLock = null;
+  }
+}
+
+// 탭이 다시 활성화되면 wake lock 재요청 (운동 중일 때만)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Workout.intervalId) {
+    requestWakeLock();
+  }
+});
+
+
+/* ====================================================
+   ⑥ 구간 배경색
+   ==================================================== */
+
 const PHASE_BG = {
   light: { warmup: '#e8c97a', jog: '#d4845a', walk: '#6aaa8c', cooldown: '#e8c97a' },
   dark:  { warmup: '#4a3a10', jog: '#5a2e18', walk: '#1a4a38', cooldown: '#4a3a10' },
@@ -597,7 +324,7 @@ function clearPhaseBackground() {
 
 
 /* ====================================================
-   ④ 화면 전환
+   ⑦ 화면 전환
    ==================================================== */
 
 function showScreen(id) {
@@ -607,32 +334,28 @@ function showScreen(id) {
 
 
 /* ====================================================
-   ⑤ 홈 화면 렌더링
+   ⑧ 홈 화면 렌더링
    ==================================================== */
 
 function renderHome() {
   showScreen('screen-home');
 
-  // btn-start 항상 초기 상태로 리셋 (showSessionCard가 바꿔놓을 수 있으므로)
   const btn = document.getElementById('btn-start');
   btn.onclick   = startWorkout;
   btn.disabled  = false;
   btn.style.opacity = '1';
   btn.textContent   = '시작하기 →';
 
-  const idx      = STATE.currentIdx;
-  const plan     = CURRICULUM[idx];
-  const isDone   = STATE.completedIdx.includes(idx);
+  const idx    = STATE.currentIdx;
+  const plan   = CURRICULUM[idx];
+  const isDone = STATE.completedIdx.includes(idx);
 
-  // 주차/회차 표시 업데이트
   document.getElementById('home-week-label').textContent = `${plan.week}주차`;
   document.getElementById('home-progress-label').textContent =
     `${STATE.completedIdx.length} / ${TOTAL_SESSIONS} 완료`;
 
-  // 주차 카드 목록 그리기
   drawWeekGrid();
 
-  // 오늘 카드 vs 완료 카드
   if (isDone) {
     document.getElementById('today-card').classList.add('hidden');
     document.getElementById('done-card').classList.remove('hidden');
@@ -651,13 +374,9 @@ function renderHome() {
         ? `${plan.week}주차 ${plan.session}회차 — ${plan.title}`
         : `${plan.week}주차 ${plan.session}회차`;
     document.getElementById('today-meta').textContent = buildWorkoutMeta(plan);
-    document.getElementById('btn-start').textContent = '시작하기 →';
-    document.getElementById('btn-start').disabled = false;
-    document.getElementById('btn-start').style.opacity = '1';
   }
 }
 
-// 9주 × 3회 그리드 그리기
 function drawWeekGrid() {
   const grid = document.getElementById('week-grid');
   grid.innerHTML = '';
@@ -666,21 +385,19 @@ function drawWeekGrid() {
     const weekRow = document.createElement('div');
     weekRow.className = 'week-row';
 
-    // 주차 레이블
     const weekLabel = document.createElement('div');
     weekLabel.className = 'week-label';
     weekLabel.textContent = `${w}주`;
     weekRow.appendChild(weekLabel);
 
-    // 3개 세션 점
     const dotsWrap = document.createElement('div');
     dotsWrap.className = 'week-dots';
 
     for (let s = 1; s <= 3; s++) {
       const sesIdx = (w - 1) * 3 + (s - 1);
-      const isDone   = STATE.completedIdx.includes(sesIdx);
+      const isDone    = STATE.completedIdx.includes(sesIdx);
       const isCurrent = sesIdx === STATE.currentIdx && !isDone;
-      const isLocked = LOCK_ENABLED && sesIdx > STATE.currentIdx;
+      const isLocked  = LOCK_ENABLED && sesIdx > STATE.currentIdx;
 
       const dot = document.createElement('button');
       dot.className = 'session-dot' +
@@ -698,10 +415,9 @@ function drawWeekGrid() {
   }
 }
 
-// 세션 점 클릭 시 카드 업데이트
 function showSessionCard(sesIdx) {
-  const plan    = CURRICULUM[sesIdx];
-  const isDone  = STATE.completedIdx.includes(sesIdx);
+  const plan     = CURRICULUM[sesIdx];
+  const isDone   = STATE.completedIdx.includes(sesIdx);
   const isLocked = LOCK_ENABLED && sesIdx > STATE.currentIdx;
 
   document.getElementById('done-card').classList.add('hidden');
@@ -725,7 +441,6 @@ function showSessionCard(sesIdx) {
     btn.disabled = true;
     btn.style.opacity = '0.4';
   } else {
-    // 이 세션을 현재로 설정 후 시작 가능하게
     btn.textContent = '시작하기 →';
     btn.disabled = false;
     btn.style.opacity = '1';
@@ -739,7 +454,7 @@ function showSessionCard(sesIdx) {
 
 
 /* ====================================================
-   유틸 함수
+   ⑨ 유틸 함수
    ==================================================== */
 
 function totalSeconds(phases) {
@@ -754,55 +469,97 @@ function fmtSec(sec) {
 }
 
 function buildWorkoutMeta(plan) {
-  const mins    = Math.round(totalSeconds(plan.phases) / 60);
+  const mins      = Math.round(totalSeconds(plan.phases) / 60);
   const jogPhases = plan.phases.filter(p => p.type === 'jog');
   const jogCount  = jogPhases.length;
 
   if (jogCount === 1) {
-    // 연속 달리기 (5주차 이후)
     return `총 ${mins}분 · 연속 조깅 ${fmtSec(jogPhases[0].duration)}`;
   }
-  const jogSec  = jogPhases[0]?.duration || 0;
-  const walkSec = plan.phases.find(p => p.type === 'walk')?.duration || 0;
-  return `총 ${mins}분 · ${jogCount}세트 (조깅 ${fmtSec(jogSec)} + 걷기 ${fmtSec(walkSec)})`;
+
+  // 복잡한 인터벌 (3,4주차) vs 단순 인터벌 (1,2주차) 분기
+  const allSameJog  = jogPhases.every(p => p.duration === jogPhases[0].duration);
+  const walkPhases  = plan.phases.filter(p => p.type === 'walk');
+  const allSameWalk = walkPhases.every(p => p.duration === walkPhases[0].duration);
+
+  if (allSameJog && allSameWalk) {
+    return `총 ${mins}분 · ${jogCount}세트 (조깅 ${fmtSec(jogPhases[0].duration)} + 걷기 ${fmtSec(walkPhases[0].duration)})`;
+  }
+  return `총 ${mins}분 · 인터벌 ${jogCount}회`;
 }
 
 
 /* ====================================================
-   ⑥ 운동 시작
+   ⑩ 운동 시작 / 재개
    ==================================================== */
 
 function startWorkout() {
-  // btn-start onclick을 기본값으로 복원
   document.getElementById('btn-start').onclick = startWorkout;
 
   const plan = CURRICULUM[STATE.currentIdx];
 
-  currentPhases   = plan.phases;
-  currentPhaseIdx = 0;
-  totalElapsed    = 0;
-  totalDuration   = totalSeconds(currentPhases);
-  remainingSec    = currentPhases[0].duration;
+  Workout.sessionIdx        = STATE.currentIdx;
+  Workout.phases            = plan.phases;
+  Workout.totalDuration     = totalSeconds(plan.phases);
+  Workout.phaseIdx          = 0;
+  Workout.phaseStartTime    = Date.now();
+  Workout.prevPhasesElapsed = 0;
 
-  saveWorkoutProgress(STATE.currentIdx, 0);
+  saveWorkoutProgress();
+  requestWakeLock();
+  buildPhaseMap();
   renderTimerScreen();
   showScreen('screen-timer');
 
-  timerInterval = setInterval(tick, 1000);
+  Workout.intervalId = setInterval(tick, 1000);
+}
+
+function resumeWorkout(progress) {
+  const plan = CURRICULUM[progress.sessionIdx];
+
+  Workout.sessionIdx        = progress.sessionIdx;
+  Workout.phases            = plan.phases;
+  Workout.totalDuration     = totalSeconds(plan.phases);
+  Workout.phaseIdx          = progress.phaseIdx;
+  Workout.phaseStartTime    = progress.phaseStartTime;
+  Workout.prevPhasesElapsed = progress.prevPhasesElapsed;
+
+  // 재개 시 phase 경계를 넘었을 수도 있음 → 보정
+  catchUpPhases();
+
+  requestWakeLock();
+  buildPhaseMap();
+  renderTimerScreen();
+  showScreen('screen-timer');
+
+  Workout.intervalId = setInterval(tick, 1000);
+}
+
+// 한 번에 여러 phase를 건너뛰어야 할 때 (백그라운드/새로고침 후)
+function catchUpPhases() {
+  while (
+    Workout.phaseIdx < Workout.phases.length - 1 &&
+    Workout.phaseRemainingSec() <= 0
+  ) {
+    const finished = Workout.phases[Workout.phaseIdx];
+    Workout.prevPhasesElapsed += finished.duration;
+    // 다음 phase는 이전 phase가 끝난 시점부터 시작
+    Workout.phaseStartTime += finished.duration * 1000;
+    Workout.phaseIdx++;
+  }
 }
 
 
 /* ====================================================
-   ⑦ 타이머 화면 렌더링
+   ⑪ 타이머 화면 렌더링
    ==================================================== */
 
 function renderTimerScreen() {
-  const phase = currentPhases[currentPhaseIdx];
+  const phase = Workout.phases[Workout.phaseIdx];
 
   document.getElementById('phase-label').textContent = phase.label;
   document.getElementById('phase-desc').textContent  = PHASE_LABELS[phase.type] || '';
 
-  // 워밍업 구간일 때만 런닝 팁 표시
   const tipsEl = document.getElementById('running-tips');
   if (phase.type === 'warmup') {
     tipsEl.classList.remove('hidden');
@@ -810,42 +567,41 @@ function renderTimerScreen() {
     tipsEl.classList.add('hidden');
   }
 
-  // 구간 배경색 적용
   applyPhaseBackground(phase.type);
 
   if (document.getElementById('phase-map').children.length === 0) buildPhaseMap();
   updatePhaseMap();
-  updateTimerDisplay(remainingSec);
 
-  const pct = (totalElapsed / totalDuration) * 100;
+  const remaining = Math.max(0, Workout.phaseRemainingSec());
+  updateTimerDisplay(remaining);
+
+  const pct = Math.min(100, (Workout.totalElapsedSec() / Workout.totalDuration) * 100);
   document.getElementById('progress-fill').style.width = `${pct}%`;
   document.getElementById('total-time-label').textContent =
-    `총 ${Math.round(totalDuration / 60)}분`;
+    `총 ${Math.round(Workout.totalDuration / 60)}분`;
 
-  const isLast = currentPhaseIdx === currentPhases.length - 1 && remainingSec <= 0;
-  document.getElementById('btn-finish').classList.toggle('hidden', !isLast);
+  document.getElementById('btn-finish').classList.toggle('hidden', !Workout.isFinished());
 }
 
 function buildPhaseMap() {
   const map = document.getElementById('phase-map');
   map.innerHTML = '';
-  currentPhases.forEach((p, i) => {
+  Workout.phases.forEach((p, i) => {
     const chip = document.createElement('div');
     chip.className = `phase-chip ${PHASE_CHIP_CLASS[p.type] || ''}`;
     chip.id = `chip-${i}`;
-    const ratio = p.duration / totalDuration;
     chip.style.flex = 1;
     map.appendChild(chip);
   });
 }
 
 function updatePhaseMap() {
-  currentPhases.forEach((_, i) => {
+  Workout.phases.forEach((_, i) => {
     const chip = document.getElementById(`chip-${i}`);
     if (!chip) return;
     chip.classList.remove('active', 'done');
-    if (i < currentPhaseIdx)       chip.classList.add('done');
-    else if (i === currentPhaseIdx) chip.classList.add('active');
+    if (i < Workout.phaseIdx)         chip.classList.add('done');
+    else if (i === Workout.phaseIdx)  chip.classList.add('active');
   });
 }
 
@@ -858,29 +614,32 @@ function updateTimerDisplay(sec) {
 
 
 /* ====================================================
-   ⑧ 타이머 틱
+   ⑫ 타이머 틱 (1초마다 화면 갱신)
+   ----------------------------------------------------
+   시간 계산은 Workout.phaseRemainingSec() 등을 통해
+   모두 Date.now() 기반. tick은 화면을 다시 그리기만 함.
    ==================================================== */
 
 function tick() {
-  remainingSec--;
-  totalElapsed++;
+  const prevPhaseIdx = Workout.phaseIdx;
 
-  if (remainingSec <= 0) {
-    currentPhaseIdx++;
+  // phase 경계를 넘었는지 확인 (한 번에 여러 개도 넘을 수 있음)
+  catchUpPhases();
 
-    if (currentPhaseIdx >= currentPhases.length) {
-      clearInterval(timerInterval);
-      currentPhaseIdx = currentPhases.length - 1;
-      remainingSec = 0;
-      renderTimerScreen();
-      document.getElementById('btn-finish').classList.remove('hidden');
-      vibrate([200, 100, 200]);
-      return;
-    }
+  // 마지막 phase를 다 마쳤으면 정지
+  if (Workout.isFinished()) {
+    clearInterval(Workout.intervalId);
+    Workout.intervalId = null;
+    renderTimerScreen();
+    document.getElementById('btn-finish').classList.remove('hidden');
+    vibrate([200, 100, 200]);
+    return;
+  }
 
+  // phase가 바뀌었으면 진동 + 저장
+  if (Workout.phaseIdx !== prevPhaseIdx) {
     vibrate([100]);
-    remainingSec = currentPhases[currentPhaseIdx].duration;
-    saveWorkoutProgress(STATE.currentIdx, currentPhaseIdx);
+    saveWorkoutProgress();
   }
 
   renderTimerScreen();
@@ -892,48 +651,45 @@ function vibrate(pattern) {
 
 
 /* ====================================================
-   ⑨ 운동 완료 + 피드백
+   ⑬ 운동 완료 + 피드백
    ==================================================== */
 
 function finishWorkout() {
-  clearInterval(timerInterval);
-  timerInterval = null;
+  if (Workout.intervalId) {
+    clearInterval(Workout.intervalId);
+    Workout.intervalId = null;
+  }
+  releaseWakeLock();
   clearPhaseBackground();
   clearWorkoutProgress();
 
-  const plan = CURRICULUM[STATE.currentIdx];
+  const plan = CURRICULUM[Workout.sessionIdx];
   const isLastSessionOfWeek = plan.session === 3;
 
-  // 팁 영역 숨기기
   document.getElementById('running-tips').classList.add('hidden');
   document.getElementById('phase-map').innerHTML = '';
 
   if (isLastSessionOfWeek) {
-    // 3회차 완료 → 피드백 화면
     showFeedbackScreen(plan.week);
   } else {
-    // 1~2회차 완료 → 바로 다음으로
-    markSessionComplete(STATE.currentIdx);
+    markSessionComplete(Workout.sessionIdx);
   }
 }
 
 function showFeedbackScreen(week) {
-  // 피드백 화면 초기화
   document.getElementById('feedback-title').textContent = `${week}주차 완료!`;
   document.getElementById('feedback-hard-confirm').classList.add('hidden');
   document.getElementById('feedback-easy-warning').classList.add('hidden');
-  // 버튼들 다시 보이기
   document.querySelector('.feedback-buttons').classList.remove('hidden');
   document.querySelector('.feedback-sub').classList.remove('hidden');
   showScreen('screen-feedback');
 }
 
 function handleFeedback(type) {
-  const plan = CURRICULUM[STATE.currentIdx];
+  const plan = CURRICULUM[Workout.sessionIdx];
   const week = plan.week;
 
   if (type === 'hard') {
-    // 확인 메시지 표시
     document.querySelector('.feedback-buttons').classList.add('hidden');
     document.querySelector('.feedback-sub').classList.add('hidden');
     document.getElementById('confirm-msg').textContent =
@@ -941,25 +697,21 @@ function handleFeedback(type) {
     document.getElementById('feedback-hard-confirm').classList.remove('hidden');
 
   } else if (type === 'easy') {
-    // 경고 문구 잠깐 보여주고 다음으로
     document.getElementById('feedback-easy-warning').classList.remove('hidden');
     setTimeout(() => {
-      markSessionComplete(STATE.currentIdx);
+      markSessionComplete(Workout.sessionIdx);
     }, 2500);
 
   } else {
-    // 적당 → 바로 다음으로
-    markSessionComplete(STATE.currentIdx);
+    markSessionComplete(Workout.sessionIdx);
   }
 }
 
 function confirmRepeat() {
-  // 이번 주차 1회차로 되돌아가기
-  const plan   = CURRICULUM[STATE.currentIdx];
-  const week   = plan.week;
-  const firstIdxOfWeek = (week - 1) * 3; // 주차 첫 세션 인덱스
+  const plan = CURRICULUM[Workout.sessionIdx];
+  const week = plan.week;
+  const firstIdxOfWeek = (week - 1) * 3;
 
-  // 이번 주차 완료 기록 제거
   STATE.completedIdx = STATE.completedIdx.filter(
     i => i < firstIdxOfWeek || i >= firstIdxOfWeek + 3
   );
@@ -973,14 +725,12 @@ function markSessionComplete(idx) {
     STATE.completedIdx.push(idx);
   }
 
-  // 전체 완료
   if (STATE.completedIdx.length >= TOTAL_SESSIONS) {
     saveState(STATE);
     showScreen('screen-complete');
     return;
   }
 
-  // 다음 세션으로 이동
   let nextIdx = idx + 1;
   while (nextIdx < TOTAL_SESSIONS && STATE.completedIdx.includes(nextIdx)) {
     nextIdx++;
@@ -992,15 +742,18 @@ function markSessionComplete(idx) {
 
 
 /* ====================================================
-   ⑩ 뒤로가기
+   ⑭ 뒤로가기
    ==================================================== */
 
 function goBack() {
-  const confirmed = confirm('운동을 중단할까요?\n나가면 오늘 진행이 초기화돼요.');
+  const confirmed = confirm('운동을 중단할까요?');
   if (!confirmed) return;
 
-  clearInterval(timerInterval);
-  timerInterval = null;
+  if (Workout.intervalId) {
+    clearInterval(Workout.intervalId);
+    Workout.intervalId = null;
+  }
+  releaseWakeLock();
   clearWorkoutProgress();
   clearPhaseBackground();
   document.getElementById('phase-map').innerHTML = '';
@@ -1009,27 +762,29 @@ function goBack() {
 
 
 /* ====================================================
-   ⑪ 앱 초기화
+   ⑮ 앱 초기화
    ==================================================== */
 
 function resetApp() {
+  if (!confirm('모든 진행 상황이 초기화돼요. 계속할까요?')) return;
   localStorage.removeItem(APP_KEY);
+  clearWorkoutProgress();
   STATE = loadState();
   renderHome();
 }
 
 
 /* ====================================================
-   ⑫ 진입점
+   ⑯ 진입점
    ==================================================== */
 (function init() {
   const progress = loadWorkoutProgress();
   if (
     progress &&
-    progress.idx === STATE.currentIdx &&
-    !STATE.completedIdx.includes(progress.idx)
+    progress.sessionIdx === STATE.currentIdx &&
+    !STATE.completedIdx.includes(progress.sessionIdx)
   ) {
-    const plan = CURRICULUM[progress.idx];
+    const plan = CURRICULUM[progress.sessionIdx];
     if (plan && plan.type === 'workout') {
       const phase = plan.phases[progress.phaseIdx];
       const resume = confirm(
@@ -1037,20 +792,8 @@ function resetApp() {
         `"${phase?.label || ''}" 구간부터 이어서 할까요?`
       );
       if (resume) {
-        currentPhases   = plan.phases;
-        currentPhaseIdx = progress.phaseIdx;
-        totalDuration   = totalSeconds(currentPhases);
-        remainingSec    = currentPhases[currentPhaseIdx].duration;
-        totalElapsed    = currentPhases
-          .slice(0, currentPhaseIdx)
-          .reduce((s, p) => s + p.duration, 0);
-
-        // phase-map 초기화 (재개 시 buildPhaseMap이 실행되도록)
         document.getElementById('phase-map').innerHTML = '';
-
-        renderTimerScreen();
-        showScreen('screen-timer');
-        timerInterval = setInterval(tick, 1000);
+        resumeWorkout(progress);
         return;
       } else {
         clearWorkoutProgress();
