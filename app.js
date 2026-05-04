@@ -477,15 +477,19 @@ function buildWorkoutMeta(plan) {
     return `총 ${mins}분 · 연속 조깅 ${fmtSec(jogPhases[0].duration)}`;
   }
 
-  // 복잡한 인터벌 (3,4주차) vs 단순 인터벌 (1,2주차) 분기
-  const allSameJog  = jogPhases.every(p => p.duration === jogPhases[0].duration);
-  const walkPhases  = plan.phases.filter(p => p.type === 'walk');
-  const allSameWalk = walkPhases.every(p => p.duration === walkPhases[0].duration);
+  const walkPhases = plan.phases.filter(p => p.type === 'walk');
 
-  if (allSameJog && allSameWalk) {
-    return `총 ${mins}분 · ${jogCount}세트 (조깅 ${fmtSec(jogPhases[0].duration)} + 걷기 ${fmtSec(walkPhases[0].duration)})`;
-  }
-  return `총 ${mins}분 · 인터벌 ${jogCount}회`;
+  // 같은 값이면 단일값, 다르면 "최소~최대" 범위로 표기
+  const fmtRange = (phases) => {
+    if (phases.length === 0) return '';
+    const durations = phases.map(p => p.duration);
+    const min = Math.min(...durations);
+    const max = Math.max(...durations);
+    return min === max ? fmtSec(min) : `${fmtSec(min)}~${fmtSec(max)}`;
+  };
+
+  const setCount = Math.max(jogCount, walkPhases.length);
+  return `총 ${mins}분 · ${setCount}세트 (조깅 ${fmtRange(jogPhases)} + 걷기 ${fmtRange(walkPhases)})`;
 }
 
 
