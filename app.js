@@ -464,8 +464,8 @@ const PHASE_CHIP_CLASS = {
 // 구간 타입별 화면 레이블
 const PHASE_LABELS = {
   warmup:   '발목, 무릎 스트레칭 후 가볍게 걸으며 준비해요',
-  jog:      '조깅 — 편하게 달려요',
-  walk:     '걷기 — 숨 고르기',
+  jog:      '편하게 달려요',
+  walk:     '숨 고르기',
   cooldown: '천천히 걸으며 마무리해요',
 };
 
@@ -527,7 +527,7 @@ let STATE = loadState();
 const WORKOUT_KEY = APP_KEY + '_workout';
 
 function saveWorkoutProgress(idx, phaseIdx) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit'});
   localStorage.setItem(WORKOUT_KEY, JSON.stringify({ idx, phaseIdx, date: today }));
 }
 
@@ -539,7 +539,7 @@ function loadWorkoutProgress() {
   const saved = localStorage.getItem(WORKOUT_KEY);
   if (!saved) return null;
   const data = JSON.parse(saved);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit'});
   if (data.date !== today) { clearWorkoutProgress(); return null; }
   return data;
 }
@@ -833,7 +833,7 @@ function buildPhaseMap() {
     chip.className = `phase-chip ${PHASE_CHIP_CLASS[p.type] || ''}`;
     chip.id = `chip-${i}`;
     const ratio = p.duration / totalDuration;
-    chip.style.flex = ratio * 10;
+    chip.style.flex = 1;
     map.appendChild(chip);
   });
 }
