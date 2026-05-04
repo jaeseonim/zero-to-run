@@ -731,6 +731,7 @@ function showSessionCard(sesIdx) {
     btn.style.opacity = '1';
     btn.onclick = () => {
       STATE.currentIdx = sesIdx;
+      saveState(STATE);
       startWorkout();
     };
   }
