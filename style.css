@@ -115,65 +115,91 @@ html, body {
 }
 
 #today-card, #done-card {
-  margin-left: 20px;
-  margin-right: 20px;
+  /* 카드 폭을 그리드와 동일하게 정렬 — PC에서 과도하게 늘어나지 않도록 max-width 제한 */
+  margin-left: auto;
+  margin-right: auto;
+  width: calc(100% - 40px);
+  max-width: 480px;
 }
 
 /* ====================================================
    9주 × 3회 그리드
+   ----------------------------------------------------
+   레이아웃 의도:
+   - 카드를 max-width로 제한해 PC에서 과하게 늘어나는 걸 방지
+     (모바일에서는 width: calc(100% - 40px)로 좌우 20px 여백 유지)
+   - 한 행은 3-column grid: [라벨 1fr | 점들 auto | 진행률 1fr]
+     → 가운데 점이 카드의 정중앙에 정확히 옴
+   - 양 옆 1fr 칸에 라벨/진행률이 각각 들어가 카드 좌우 빈 공간을
+     자연스럽게 채움
+   - 점 크기와 간격을 키워 시각적 무게감 확보
    ==================================================== */
 .week-grid-wrap {
-  margin: 12px 20px;
+  margin: 12px auto;
+  width: calc(100% - 40px);
+  max-width: 480px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px 24px;
+  padding: 22px 18px;
   /* 스크롤 없이 9주 모두 표시 — overflow / max-height 제거 */
-  display: flex;
-  justify-content: center;
 }
 
 .week-grid {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  /* 그리드 자체를 가운데 정렬 */
-  align-items: center;
+  gap: 12px;
 }
 
+/* 한 행: [좌측 — 주차 라벨 | 가운데 — 점 3개 | 우측 — 진행률]
+   1fr / auto / 1fr 구조이므로 가운데 점들은 카드의 정중앙에 위치 */
 .week-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 18px;
-  /* 행 내부 콘텐츠 가운데 정렬 */
-  justify-content: center;
+  gap: 14px;
 }
 
 .week-label {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-muted);
-  min-width: 32px;
+  /* 우측 정렬 — 가운데 점 묶음 쪽으로 자연스럽게 붙음 */
   text-align: right;
   letter-spacing: 0.02em;
 }
 
 .week-dots {
   display: flex;
-  gap: 16px;
-  /* flex:1 제거 — 콘텐츠 폭만큼만 차지하여 가운데 정렬 가능 */
+  gap: 18px;
+  /* 가운데 칸이라 자동으로 카드 정중앙에 위치 */
+}
+
+/* 우측 진행률 — 좌측 라벨과 시각적 균형을 맞춰 카드 빈 공간을 메움.
+   점 묶음 쪽으로 붙도록 좌측 정렬. */
+.week-status {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  text-align: left;
+  font-variant-numeric: tabular-nums; /* 숫자 폭 일정하게 */
+}
+.week-status.done {
+  color: var(--accent-dk);
+  font-weight: 700;
 }
 
 /* 세션 점 버튼 */
 .session-dot {
-  /* 카드 안에서 시각적으로 충분한 존재감을 갖도록 크기 조정 */
-  width: 38px;
-  height: 38px;
+  /* 카드 안에서 시각적으로 충분한 존재감 */
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 2px solid var(--border);
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   font-family: 'Noto Sans KR', sans-serif;
   cursor: pointer;
@@ -213,7 +239,7 @@ html, body {
    오늘 카드
    ==================================================== */
 .today-card {
-  margin: 8px 20px 0;
+  margin: 8px auto 0; /* 좌우 auto — 위 #today-card 규칙의 max-width와 함께 가운데 정렬 */
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -243,7 +269,7 @@ html, body {
 
 /* 완료 카드 */
 .done-card {
-  margin: 8px 20px 0;
+  margin: 8px auto 0; /* 좌우 auto — 위 #done-card 규칙의 max-width와 함께 가운데 정렬 */
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);

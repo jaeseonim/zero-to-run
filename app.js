@@ -456,19 +456,23 @@ function drawWeekGrid() {
     const weekRow = document.createElement('div');
     weekRow.className = 'week-row';
 
+    // ── 좌측: 주차 라벨 ──
     const weekLabel = document.createElement('div');
     weekLabel.className = 'week-label';
     weekLabel.textContent = `${w}주`;
     weekRow.appendChild(weekLabel);
 
+    // ── 가운데: 세션 점 3개 ──
     const dotsWrap = document.createElement('div');
     dotsWrap.className = 'week-dots';
 
+    let weekDoneCount = 0;
     for (let s = 1; s <= 3; s++) {
       const sesIdx = (w - 1) * 3 + (s - 1);
       const isDone    = STATE.completedIdx.includes(sesIdx);
       const isCurrent = sesIdx === STATE.currentIdx && !isDone;
       const isLocked  = LOCK_ENABLED && sesIdx > STATE.currentIdx;
+      if (isDone) weekDoneCount++;
 
       const dot = document.createElement('button');
       dot.className = 'session-dot' +
@@ -480,8 +484,15 @@ function drawWeekGrid() {
       dot.addEventListener('click', () => showSessionCard(sesIdx));
       dotsWrap.appendChild(dot);
     }
-
     weekRow.appendChild(dotsWrap);
+
+    // ── 우측: 주차 진행률 (라벨과 시각적 균형 + 카드 빈 공간을 채움) ──
+    const status = document.createElement('div');
+    const isWeekDone = weekDoneCount === 3;
+    status.className = 'week-status' + (isWeekDone ? ' done' : '');
+    status.textContent = isWeekDone ? '완료' : `${weekDoneCount}/3`;
+    weekRow.appendChild(status);
+
     grid.appendChild(weekRow);
   }
 }
