@@ -225,7 +225,7 @@ function signInWithGoogle() {
 
       if (e.code === 'auth/popup-blocked') {
         // 브라우저가 팝업을 차단한 경우 (iOS Safari 등)
-        alert('팝업이 차단됐어요.\n브라우저 설정에서 팝업을 허용하거나,\nChrome으로 접속해주세요.');
+        alert('팝업이 차단됐어요.\n브라우저 설정에서 팝업을 허용해주세요.');
         return;
       }
 
