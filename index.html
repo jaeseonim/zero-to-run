@@ -8,12 +8,108 @@
   <meta http-equiv="Expires" content="0" />
   <title>첫 발걸음 — 5K 완주 프로그램</title>
   <link rel="stylesheet" href="style.css?v=3" />
+
+  <!-- ===== 로그인 화면 전용 스타일 (style.css 수정 최소화용) ===== -->
+  <style>
+    /* 로그인 화면 전체 레이아웃 */
+    .login-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 40px 28px;
+      text-align: center;
+    }
+
+    /* Google 로그인 버튼 */
+    .btn-google {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 28px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      margin-top: 32px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .btn-google:hover {
+      border-color: var(--accent);
+      background: var(--bg);
+    }
+
+    /* 로그인 안내 문구 */
+    .login-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 14px;
+      line-height: 1.7;
+    }
+
+    /* 홈 헤더 안의 로그아웃 버튼 */
+    .btn-logout {
+      position: absolute;
+      top: 22px;
+      left: 20px;
+      background: none;
+      border: none;
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: 'Noto Sans KR', sans-serif;
+      padding: 4px 0;
+      letter-spacing: 0.02em;
+    }
+    .btn-logout:hover { color: var(--text); }
+
+    /* 로그인 로딩 중 표시 */
+    .login-loading {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
 
-  <!-- ===== 화면 1: 홈 ===== -->
-  <div id="screen-home" class="screen active">
+  <!-- ===== 화면 0: 로그인 (앱 첫 진입 시 표시) ===== -->
+  <div id="screen-login" class="screen active">
+    <div class="login-content">
+      <!-- 기존 홈 화면과 같은 앱 소개 문구 재사용 -->
+      <p class="app-label">첫 발걸음</p>
+      <h1 class="home-title">5K 완주</h1>
+      <p class="home-sub">9주, 주 3회 — 천천히, 확실하게</p>
+
+      <!-- Google 로그인 버튼 -->
+      <button class="btn-google" onclick="signInWithGoogle()">
+        <!-- Google 공식 색상 G 로고 (인라인 SVG) -->
+        <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        Google로 시작하기
+      </button>
+
+      <p class="login-hint">로그인하면 진행 상황이 자동으로 저장돼요<br/>소셜 기능은 없어요 — 데이터 저장만을 위한 로그인이에요</p>
+    </div>
+  </div>
+
+
+  <!-- ===== 화면 1: 홈 (로그인 후 표시) ===== -->
+  <!-- active 클래스 제거 → 로그인 화면이 먼저 뜨고, JS에서 전환함 -->
+  <div id="screen-home" class="screen">
     <header class="home-header">
+      <!-- 로그아웃 버튼 (왼쪽 상단) -->
+      <button class="btn-logout" onclick="logout()" title="로그아웃">로그아웃</button>
+
       <button class="btn-theme" onclick="toggleTheme()" title="테마 변경">☀️</button>
       <p class="app-label">첫 발걸음</p>
       <h1 class="home-title">5K 완주</h1>
@@ -138,6 +234,14 @@
     </div>
   </div>
 
-  <script src="app.js?v=3"></script>
+
+  <!-- ===== Firebase CDN (compat 방식 — npm 불필요) ===== -->
+  <!-- 순서 중요: app → auth → firestore 순서로 로드해야 함 -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- 앱 코드 (Firebase보다 반드시 나중에 로드) -->
+  <script src="app.js?v=4"></script>
 </body>
 </html>

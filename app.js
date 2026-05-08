@@ -1,18 +1,43 @@
 /* ====================================================
-   app.js — 첫 발걸음 런닝 앱 (C25K 9주 버전 / v2)
-   기술 스택: Vanilla JavaScript + localStorage
+   app.js — 첫 발걸음 런닝 앱 (C25K 9주 버전 / v3)
+   기술 스택: Vanilla JavaScript + Firebase (Auth + Firestore)
    ----------------------------------------------------
-   v2 변경 사항
-   - 타이머: Date.now() 기반으로 재작성 (백그라운드/throttling 대응)
-   - Wake Lock API 자동 적용 (운동 중 화면 꺼짐 방지)
-   - CURRICULUM: 헬퍼 함수로 압축 (700줄 → 30줄)
-   - 전역 변수 → Workout 객체로 통합
-   - 1주차 인터벌 8세트 → 6세트로 완화 (첫날 부담 축소)
+   v3 변경 사항
+   - Google 로그인 추가 (firebase.auth)
+   - localStorage → Firestore 데이터 저장 (users/{uid}/progress)
+   - 타이머 진행 상태는 localStorage 유지 (빠른 응답 필요)
    ==================================================== */
 
 
 /* ====================================================
-   ① 설정값 + 커리큘럼 빌더
+   ① Firebase 초기화
+   ==================================================== */
+
+// Firebase 프로젝트 설정값 (Firebase 콘솔에서 복사한 값)
+const firebaseConfig = {
+  apiKey:            "AIzaSyAbbxDF3t7vmls_mHHUToh07OrBbODEp10",
+  authDomain:        "zero-to-run.firebaseapp.com",
+  projectId:         "zero-to-run",
+  storageBucket:     "zero-to-run.firebasestorage.app",
+  messagingSenderId: "410289819434",
+  appId:             "1:410289819434:web:5c755982f2c1bfc3b49853",
+};
+
+// Firebase 앱 초기화 (compat CDN 방식 — firebase 객체가 전역으로 등록됨)
+firebase.initializeApp(firebaseConfig);
+
+// 인증 기능 초기화 (Google 로그인에 사용)
+const auth = firebase.auth();
+
+// Firestore 데이터베이스 초기화 (진행 상황 저장에 사용)
+const db = firebase.firestore();
+
+// 현재 로그인된 유저 (로그아웃 시 null, 로그인 시 Firebase User 객체)
+let currentUser = null;
+
+
+/* ====================================================
+   ② 설정값 + 커리큘럼 빌더
    ==================================================== */
 
 const APP_KEY = 'firststep_c25k';
@@ -58,8 +83,6 @@ function repeatThree(week, build) {
 }
 
 // ── C25K 9주 커리큘럼 ──────────────────────────────────
-// 공식 c25k.com 기반. 단, 1주차는 8세트 → 6세트로 완화.
-// 1주차 1~3회차: 조깅 60s + 걷기 90s × 6 (총 ~25분)
 const CURRICULUM = [
   // 1주차: 조깅 1분 + 걷기 1분30초 × 6 (완화 적용)
   ...repeatThree(1, (w, s) => intervalSession(w, s, 60, 90, 6)),
@@ -112,10 +135,10 @@ const PHASE_LABELS = {
 
 
 /* ====================================================
-   ② 테마 (라이트 / 다크)
+   ③ 테마 (라이트 / 다크) — localStorage 유지
    ==================================================== */
 
-const THEME_KEY = APP_KEY + '_theme';
+const THEME_KEY = APP_KEY + '_theme'; // 테마는 기기별 설정이므로 localStorage에 그대로 저장
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -123,7 +146,7 @@ function applyTheme(theme) {
     btn.textContent = theme === 'dark' ? '🌙' : '☀️';
     btn.title = theme === 'dark' ? '다크 모드 (탭해서 라이트로)' : '라이트 모드 (탭해서 다크로)';
   });
-  localStorage.setItem(THEME_KEY, theme);
+  localStorage.setItem(THEME_KEY, theme); // 테마는 여전히 localStorage에 저장
 }
 
 function toggleTheme() {
@@ -137,37 +160,79 @@ function toggleTheme() {
   }
 }
 
+// 앱 시작 시 저장된 테마 즉시 적용 (로그인 전에도 동작)
 applyTheme(localStorage.getItem(THEME_KEY) || 'light');
 
 
 /* ====================================================
-   ③ 앱 상태 저장/복원
+   ④ 앱 상태 저장/복원 — Firestore 연동
    ==================================================== */
 
-function loadState() {
-  const saved = localStorage.getItem(APP_KEY);
-  if (saved) return JSON.parse(saved);
-  return {
-    currentIdx: 0,           // 현재 세션 인덱스 (0~26)
-    completedIdx: [],        // 완료한 세션 인덱스 배열
-  };
+// 앱 상태 기본값 (Firestore에서 불러오기 전 또는 신규 유저)
+let STATE = { currentIdx: 0, completedIdx: [] };
+
+// Firestore에서 진행 상황 불러오기 (비동기 — await 필요)
+async function loadState(uid) {
+  try {
+    // users/{uid} 문서를 읽어옴
+    const doc = await db.collection('users').doc(uid).get();
+    if (doc.exists && doc.data().progress) {
+      return doc.data().progress; // Firestore에 저장된 진행 상황 반환
+    }
+  } catch (e) {
+    // 네트워크 오류 등 — 기본값으로 진행
+    console.error('진행 상황 불러오기 실패:', e);
+  }
+  // 처음 사용하는 유저 또는 불러오기 실패 시 초기값 반환
+  return { currentIdx: 0, completedIdx: [] };
 }
 
+// Firestore에 진행 상황 저장하기 (fire-and-forget — 결과를 기다리지 않음)
 function saveState(state) {
-  localStorage.setItem(APP_KEY, JSON.stringify(state));
-}
+  if (!currentUser) return; // 로그인 안 된 경우 저장 건너뜀
 
-let STATE = loadState();
+  // users/{uid} 문서의 progress 필드만 업데이트 (merge: true → 다른 필드는 건드리지 않음)
+  db.collection('users').doc(currentUser.uid).set(
+    {
+      progress: {
+        currentIdx:    state.currentIdx,    // 현재 세션 번호
+        completedIdx:  state.completedIdx,  // 완료한 세션 목록
+      }
+    },
+    { merge: true } // 문서의 다른 필드는 유지
+  ).catch(e => console.error('진행 상황 저장 실패:', e)); // 저장 실패해도 앱은 계속 동작
+}
 
 
 /* ====================================================
-   ④ Workout — 운동 진행 상태 통합 객체
+   ⑤ Google 로그인 / 로그아웃
+   ==================================================== */
+
+// Google 로그인 팝업 열기
+function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider(); // Google 로그인 공급자 생성
+  auth.signInWithPopup(provider) // 팝업 창으로 Google 계정 선택
+    .catch(e => {
+      // 팝업 닫기 등 사용자 취소는 에러 메시지 표시 안 함
+      if (e.code !== 'auth/popup-closed-by-user') {
+        alert('로그인에 실패했어요. 다시 시도해주세요.\n(' + e.message + ')');
+      }
+    });
+  // 로그인 성공 시 → onAuthStateChanged가 자동으로 감지해서 홈 화면으로 이동
+}
+
+// 로그아웃
+function logout() {
+  if (!confirm('로그아웃 할까요?')) return;
+  auth.signOut(); // Firebase 로그아웃 → onAuthStateChanged가 null user로 재실행됨
+  // 로그아웃 후 → onAuthStateChanged가 자동으로 로그인 화면으로 이동
+}
+
+
+/* ====================================================
+   ⑥ Workout — 운동 진행 상태 통합 객체
    ----------------------------------------------------
    타이머는 Date.now() 기반으로 동작.
-   - phaseStartTime: 현재 phase가 시작된 절대 시각 (ms)
-   - 화면 갱신은 1초마다 하지만, 시간 계산은 항상
-     "지금 시각 - 시작 시각"으로 함 → 백그라운드 throttling
-     영향 받지 않음
    ==================================================== */
 
 const Workout = {
@@ -211,13 +276,13 @@ const Workout = {
 
 
 /* ====================================================
-   ④-2 운동 진행 상태 저장 (새로고침 대비)
+   ⑦ 운동 진행 상태 저장 (새로고침 대비) — localStorage 유지
    ----------------------------------------------------
-   sessionStartTime을 저장하면 새로고침 후에도 정확히
-   몇 초 진행됐는지 복원 가능
+   1초마다 저장하므로 Firestore 대신 localStorage 사용
+   (Firestore는 쓰기 비용과 지연이 있어 타이머에 부적합)
    ==================================================== */
 
-const WORKOUT_KEY = APP_KEY + '_workout';
+const WORKOUT_KEY = APP_KEY + '_workout'; // 타이머 진행 상태는 localStorage에 계속 저장
 
 function saveWorkoutProgress() {
   const data = {
@@ -227,11 +292,11 @@ function saveWorkoutProgress() {
     prevPhasesElapsed: Workout.prevPhasesElapsed,
     date: new Date().toLocaleDateString('ko-KR'),
   };
-  localStorage.setItem(WORKOUT_KEY, JSON.stringify(data));
+  localStorage.setItem(WORKOUT_KEY, JSON.stringify(data)); // 빠른 저장: localStorage 사용
 }
 
 function clearWorkoutProgress() {
-  localStorage.removeItem(WORKOUT_KEY);
+  localStorage.removeItem(WORKOUT_KEY); // 타이머 임시 데이터 삭제
 }
 
 function loadWorkoutProgress() {
@@ -239,27 +304,21 @@ function loadWorkoutProgress() {
   if (!saved) return null;
   const data = JSON.parse(saved);
   const today = new Date().toLocaleDateString('ko-KR');
-  if (data.date !== today) { clearWorkoutProgress(); return null; }
+  if (data.date !== today) { clearWorkoutProgress(); return null; } // 오늘 데이터가 아니면 무시
   return data;
 }
 
 
 /* ====================================================
-   ⑤ Wake Lock — 운동 중 화면 꺼짐 방지
-   ----------------------------------------------------
-   iOS Safari 16.4+, Chrome, Edge 지원
-   탭이 다시 visible 되면 자동 재요청
+   ⑧ Wake Lock — 운동 중 화면 꺼짐 방지
    ==================================================== */
 
 async function requestWakeLock() {
   if (!('wakeLock' in navigator)) return;
   try {
     Workout.wakeLock = await navigator.wakeLock.request('screen');
-    Workout.wakeLock.addEventListener('release', () => {
-      // 시스템이 release 했을 수도 있음
-    });
+    Workout.wakeLock.addEventListener('release', () => {});
   } catch (e) {
-    // 권한 거부 / 배터리 부족 등 — 무시 (사용자가 직접 화면 켜둘 수 있음)
     console.warn('Wake Lock 실패:', e.message);
   }
 }
@@ -280,7 +339,7 @@ document.addEventListener('visibilitychange', () => {
 
 
 /* ====================================================
-   ⑥ 구간 배경색
+   ⑨ 구간 배경색
    ==================================================== */
 
 const PHASE_BG = {
@@ -324,7 +383,7 @@ function clearPhaseBackground() {
 
 
 /* ====================================================
-   ⑦ 화면 전환
+   ⑩ 화면 전환
    ==================================================== */
 
 function showScreen(id) {
@@ -334,7 +393,7 @@ function showScreen(id) {
 
 
 /* ====================================================
-   ⑧ 홈 화면 렌더링
+   ⑪ 홈 화면 렌더링
    ==================================================== */
 
 function renderHome() {
@@ -446,7 +505,7 @@ function showSessionCard(sesIdx) {
     btn.style.opacity = '1';
     btn.onclick = () => {
       STATE.currentIdx = sesIdx;
-      saveState(STATE);
+      saveState(STATE); // Firestore에 저장
       startWorkout();
     };
   }
@@ -454,7 +513,7 @@ function showSessionCard(sesIdx) {
 
 
 /* ====================================================
-   ⑨ 유틸 함수
+   ⑫ 유틸 함수
    ==================================================== */
 
 function totalSeconds(phases) {
@@ -479,7 +538,6 @@ function buildWorkoutMeta(plan) {
 
   const walkPhases = plan.phases.filter(p => p.type === 'walk');
 
-  // 같은 값이면 단일값, 다르면 "최소~최대" 범위로 표기
   const fmtRange = (phases) => {
     if (phases.length === 0) return '';
     const durations = phases.map(p => p.duration);
@@ -494,7 +552,7 @@ function buildWorkoutMeta(plan) {
 
 
 /* ====================================================
-   ⑩ 운동 시작 / 재개
+   ⑬ 운동 시작 / 재개
    ==================================================== */
 
 function startWorkout() {
@@ -509,7 +567,7 @@ function startWorkout() {
   Workout.phaseStartTime    = Date.now();
   Workout.prevPhasesElapsed = 0;
 
-  saveWorkoutProgress();
+  saveWorkoutProgress(); // 타이머 진행 상태는 localStorage에 저장
   requestWakeLock();
   buildPhaseMap();
   renderTimerScreen();
@@ -528,7 +586,6 @@ function resumeWorkout(progress) {
   Workout.phaseStartTime    = progress.phaseStartTime;
   Workout.prevPhasesElapsed = progress.prevPhasesElapsed;
 
-  // 재개 시 phase 경계를 넘었을 수도 있음 → 보정
   catchUpPhases();
 
   requestWakeLock();
@@ -547,7 +604,6 @@ function catchUpPhases() {
   ) {
     const finished = Workout.phases[Workout.phaseIdx];
     Workout.prevPhasesElapsed += finished.duration;
-    // 다음 phase는 이전 phase가 끝난 시점부터 시작
     Workout.phaseStartTime += finished.duration * 1000;
     Workout.phaseIdx++;
   }
@@ -555,7 +611,7 @@ function catchUpPhases() {
 
 
 /* ====================================================
-   ⑪ 타이머 화면 렌더링
+   ⑭ 타이머 화면 렌더링
    ==================================================== */
 
 function renderTimerScreen() {
@@ -618,19 +674,14 @@ function updateTimerDisplay(sec) {
 
 
 /* ====================================================
-   ⑫ 타이머 틱 (1초마다 화면 갱신)
-   ----------------------------------------------------
-   시간 계산은 Workout.phaseRemainingSec() 등을 통해
-   모두 Date.now() 기반. tick은 화면을 다시 그리기만 함.
+   ⑮ 타이머 틱 (1초마다 화면 갱신)
    ==================================================== */
 
 function tick() {
   const prevPhaseIdx = Workout.phaseIdx;
 
-  // phase 경계를 넘었는지 확인 (한 번에 여러 개도 넘을 수 있음)
   catchUpPhases();
 
-  // 마지막 phase를 다 마쳤으면 정지
   if (Workout.isFinished()) {
     clearInterval(Workout.intervalId);
     Workout.intervalId = null;
@@ -640,10 +691,9 @@ function tick() {
     return;
   }
 
-  // phase가 바뀌었으면 진동 + 저장
   if (Workout.phaseIdx !== prevPhaseIdx) {
     vibrate([100]);
-    saveWorkoutProgress();
+    saveWorkoutProgress(); // 구간이 바뀔 때마다 localStorage에 저장
   }
 
   renderTimerScreen();
@@ -655,7 +705,7 @@ function vibrate(pattern) {
 
 
 /* ====================================================
-   ⑬ 운동 완료 + 피드백
+   ⑯ 운동 완료 + 피드백
    ==================================================== */
 
 function finishWorkout() {
@@ -665,7 +715,7 @@ function finishWorkout() {
   }
   releaseWakeLock();
   clearPhaseBackground();
-  clearWorkoutProgress();
+  clearWorkoutProgress(); // 타이머 임시 데이터 삭제
 
   const plan = CURRICULUM[Workout.sessionIdx];
   const isLastSessionOfWeek = plan.session === 3;
@@ -720,17 +770,17 @@ function confirmRepeat() {
     i => i < firstIdxOfWeek || i >= firstIdxOfWeek + 3
   );
   STATE.currentIdx = firstIdxOfWeek;
-  saveState(STATE);
+  saveState(STATE); // Firestore에 변경된 상태 저장
   renderHome();
 }
 
 function markSessionComplete(idx) {
   if (!STATE.completedIdx.includes(idx)) {
-    STATE.completedIdx.push(idx);
+    STATE.completedIdx.push(idx); // 완료 세션 목록에 추가
   }
 
   if (STATE.completedIdx.length >= TOTAL_SESSIONS) {
-    saveState(STATE);
+    saveState(STATE); // Firestore에 최종 저장
     showScreen('screen-complete');
     return;
   }
@@ -740,13 +790,13 @@ function markSessionComplete(idx) {
     nextIdx++;
   }
   STATE.currentIdx = Math.min(nextIdx, TOTAL_SESSIONS - 1);
-  saveState(STATE);
+  saveState(STATE); // Firestore에 다음 세션 인덱스 저장
   renderHome();
 }
 
 
 /* ====================================================
-   ⑭ 뒤로가기
+   ⑰ 뒤로가기
    ==================================================== */
 
 function goBack() {
@@ -758,7 +808,7 @@ function goBack() {
     Workout.intervalId = null;
   }
   releaseWakeLock();
-  clearWorkoutProgress();
+  clearWorkoutProgress(); // 타이머 임시 데이터 삭제
   clearPhaseBackground();
   document.getElementById('phase-map').innerHTML = '';
   renderHome();
@@ -766,48 +816,66 @@ function goBack() {
 
 
 /* ====================================================
-   ⑮ 앱 초기화
+   ⑱ 앱 초기화 (9주 완주 후 처음부터 다시 시작)
    ==================================================== */
 
 function resetApp() {
   if (!confirm('모든 진행 상황이 초기화돼요. 계속할까요?')) return;
-  localStorage.removeItem(APP_KEY);
-  clearWorkoutProgress();
-  STATE = loadState();
+  clearWorkoutProgress(); // 타이머 임시 데이터 삭제
+  STATE = { currentIdx: 0, completedIdx: [] }; // 메모리 상태 초기화
+  saveState(STATE); // Firestore에도 초기화된 상태 저장
   renderHome();
 }
 
 
 /* ====================================================
-   ⑯ 진입점
+   ⑲ 진입점 — Firebase 로그인 상태에 따라 화면 결정
    ==================================================== */
 (function init() {
-  const progress = loadWorkoutProgress();
-  if (
-    progress &&
-    progress.sessionIdx === STATE.currentIdx &&
-    !STATE.completedIdx.includes(progress.sessionIdx)
-  ) {
-    const plan = CURRICULUM[progress.sessionIdx];
-    if (plan && plan.type === 'workout') {
-      const phase = plan.phases[progress.phaseIdx];
-      const resume = confirm(
-        `이전에 ${plan.week}주차 ${plan.session}회차 운동 중이었어요.\n` +
-        `"${phase?.label || ''}" 구간부터 이어서 할까요?`
-      );
-      if (resume) {
-        document.getElementById('phase-map').innerHTML = '';
-        resumeWorkout(progress);
-        return;
-      } else {
-        clearWorkoutProgress();
-      }
-    }
-  }
+  // onAuthStateChanged: 앱 시작 시 + 로그인/로그아웃 때마다 자동으로 실행됨
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      // ── 로그인된 경우 ──
+      currentUser = user; // 전역 변수에 유저 정보 저장
 
-  if (STATE.completedIdx.length >= TOTAL_SESSIONS) {
-    showScreen('screen-complete');
-  } else {
-    renderHome();
-  }
+      // Firestore에서 이 유저의 진행 상황을 불러옴 (비동기 대기)
+      STATE = await loadState(user.uid);
+
+      // 이전에 운동 중이었다면 이어서 할지 물어보기
+      const progress = loadWorkoutProgress();
+      if (
+        progress &&
+        progress.sessionIdx === STATE.currentIdx &&
+        !STATE.completedIdx.includes(progress.sessionIdx)
+      ) {
+        const plan = CURRICULUM[progress.sessionIdx];
+        if (plan && plan.type === 'workout') {
+          const phase = plan.phases[progress.phaseIdx];
+          const resume = confirm(
+            `이전에 ${plan.week}주차 ${plan.session}회차 운동 중이었어요.\n` +
+            `"${phase?.label || ''}" 구간부터 이어서 할까요?`
+          );
+          if (resume) {
+            document.getElementById('phase-map').innerHTML = '';
+            resumeWorkout(progress);
+            return; // 타이머 화면으로 이동했으므로 여기서 종료
+          } else {
+            clearWorkoutProgress(); // 이어서 안 할 경우 임시 데이터 삭제
+          }
+        }
+      }
+
+      // 9주 완주 여부에 따라 화면 결정
+      if (STATE.completedIdx.length >= TOTAL_SESSIONS) {
+        showScreen('screen-complete'); // 완주 화면
+      } else {
+        renderHome(); // 홈 화면
+      }
+
+    } else {
+      // ── 로그인 안 된 경우 ──
+      currentUser = null;
+      showScreen('screen-login'); // 로그인 화면 표시
+    }
+  });
 })();
