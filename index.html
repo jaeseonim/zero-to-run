@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>첫 발걸음 — 5K 완주 프로그램</title>
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=7" />
 
   <!-- ===== 로그인 화면 전용 스타일 (style.css 수정 최소화용) ===== -->
   <style>
@@ -181,46 +181,6 @@
   </div>
 
 
-  <!-- ===== 화면 4: 피드백 ===== -->
-  <div id="screen-feedback" class="screen">
-    <div class="feedback-content">
-      <div class="feedback-badge">🎉</div>
-      <h2 class="feedback-title" id="feedback-title">주차 완료!</h2>
-      <p class="feedback-sub">이번 주차 어땠나요?</p>
-
-      <div class="feedback-buttons">
-        <button class="btn-feedback btn-hard" onclick="handleFeedback('hard')">
-          <span class="feedback-emoji">😤</span>
-          <span class="feedback-label">힘들었어요</span>
-        </button>
-        <button class="btn-feedback btn-ok" onclick="handleFeedback('ok')">
-          <span class="feedback-emoji">😊</span>
-          <span class="feedback-label">적당했어요</span>
-        </button>
-        <button class="btn-feedback btn-easy" onclick="handleFeedback('easy')">
-          <span class="feedback-emoji">😎</span>
-          <span class="feedback-label">쉬웠어요</span>
-        </button>
-      </div>
-
-      <!-- 힘들었어요 확인 메시지 -->
-      <div id="feedback-hard-confirm" class="feedback-confirm hidden">
-        <p class="confirm-msg" id="confirm-msg"></p>
-        <p class="confirm-sub">반복하는 게 오히려 더 단단한 기초가 돼요 💪</p>
-        <div class="confirm-btns">
-          <button class="btn-primary" onclick="confirmRepeat()">네, 다시 할게요</button>
-          <button class="btn-secondary" onclick="handleFeedback('ok')">아니요, 다음으로</button>
-        </div>
-      </div>
-
-      <!-- 쉬웠어요 경고 메시지 -->
-      <div id="feedback-easy-warning" class="feedback-warning hidden">
-        <p>쉽게 느껴지더라도 몸은 아직 적응 중이에요.<br/>무리하면 부상으로 이어질 수 있어요.</p>
-      </div>
-    </div>
-  </div>
-
-
   <!-- ===== 화면 5: 9주 완주 ===== -->
   <div id="screen-complete" class="screen">
     <div class="complete-content">
@@ -242,6 +202,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
   <!-- 앱 코드 (Firebase보다 반드시 나중에 로드) -->
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

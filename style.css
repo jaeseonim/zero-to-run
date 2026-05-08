@@ -74,7 +74,7 @@ html, body {
    ==================================================== */
 .home-header {
   position: relative;
-  padding: 48px 28px 16px;
+  padding: 36px 28px 12px;
   text-align: center;
 }
 .app-label {
@@ -123,25 +123,30 @@ html, body {
    9주 × 3회 그리드
    ==================================================== */
 .week-grid-wrap {
-  margin: 16px 20px 12px;
+  margin: 12px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px 20px;
-  overflow-y: auto;
-  max-height: 320px;
+  padding: 12px 16px;
+  /* 스크롤 없이 9주 모두 표시 — overflow / max-height 제거 */
+  display: flex;
+  justify-content: center;
 }
 
 .week-grid {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+  /* 그리드 자체를 가운데 정렬 */
+  align-items: center;
 }
 
 .week-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  /* 행 내부 콘텐츠 가운데 정렬 */
+  justify-content: center;
 }
 
 .week-label {
@@ -155,18 +160,19 @@ html, body {
 .week-dots {
   display: flex;
   gap: 8px;
-  flex: 1;
+  /* flex:1 제거 — 콘텐츠 폭만큼만 차지하여 가운데 정렬 가능 */
 }
 
 /* 세션 점 버튼 */
 .session-dot {
-  width: 40px;
-  height: 40px;
+  /* 9주 모두 스크롤 없이 보이도록 크기 축소 */
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 2px solid var(--border);
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   font-family: 'Noto Sans KR', sans-serif;
   cursor: pointer;
@@ -382,6 +388,9 @@ html, body {
 
 /* 타이머 화면 완료 버튼 */
 #btn-finish {
+  /* .btn-primary의 width:100% + 좌우 margin 24px = 화면 밖으로 잘리는 문제 수정.
+     margin 대신 좌우 여백을 width 계산에 포함시킨다. */
+  width: calc(100% - 48px);
   margin: 0 24px;
   background: rgba(0,0,0,0.2);
   color: white;
@@ -419,105 +428,6 @@ html, body {
 .tip-item:last-child { margin-bottom: 0; }
 [data-theme="dark"] .tip-item { color: rgba(255,255,255,0.8); }
 [data-theme="dark"] .running-tips { background: rgba(0,0,0,0.25); }
-
-/* ====================================================
-   화면 4 — 피드백
-   ==================================================== */
-.feedback-content {
-  max-width: 400px;
-  margin: 0 auto;
-  padding: 72px 28px 40px;
-  text-align: center;
-}
-.feedback-badge {
-  font-size: 56px;
-  margin-bottom: 16px;
-}
-.feedback-title {
-  font-family: 'Noto Serif KR', serif;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-.feedback-sub {
-  font-size: 15px;
-  color: var(--text-muted);
-  margin-bottom: 32px;
-}
-.feedback-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-.btn-feedback {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  padding: 18px 24px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: 'Noto Sans KR', sans-serif;
-  text-align: left;
-}
-.btn-feedback:hover { border-color: var(--accent); background: var(--bg); }
-.btn-feedback:active { transform: scale(0.98); }
-.feedback-emoji { font-size: 24px; }
-.feedback-label {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text);
-}
-
-/* 힘들었어요 확인 */
-.feedback-confirm {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 24px;
-  text-align: center;
-}
-.confirm-msg {
-  font-family: 'Noto Serif KR', serif;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-.confirm-sub {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-bottom: 20px;
-  line-height: 1.7;
-}
-.confirm-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* 쉬웠어요 경고 */
-.feedback-warning {
-  margin-top: 16px;
-  padding: 14px 18px;
-  background: #fff3cd;
-  border: 1px solid #e8c97a;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  color: #7a5a10;
-  line-height: 1.7;
-  text-align: center;
-}
-[data-theme="dark"] .feedback-warning {
-  background: #4a3a10;
-  border-color: #6a5a20;
-  color: #e8c97a;
-}
 
 /* ====================================================
    화면 3 — 완주

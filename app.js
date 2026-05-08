@@ -717,7 +717,10 @@ function vibrate(pattern) {
 
 
 /* ====================================================
-   ⑯ 운동 완료 + 피드백
+   ⑯ 운동 완료
+   ----------------------------------------------------
+   주차 마지막 세션의 강도 피드백 화면은 제거됨.
+   세션 완료 시 항상 곧바로 다음 세션으로 진행한다.
    ==================================================== */
 
 function finishWorkout() {
@@ -729,61 +732,11 @@ function finishWorkout() {
   clearPhaseBackground();
   clearWorkoutProgress(); // 타이머 임시 데이터 삭제
 
-  const plan = CURRICULUM[Workout.sessionIdx];
-  const isLastSessionOfWeek = plan.session === 3;
-
   document.getElementById('running-tips').classList.add('hidden');
   document.getElementById('phase-map').innerHTML = '';
 
-  if (isLastSessionOfWeek) {
-    showFeedbackScreen(plan.week);
-  } else {
-    markSessionComplete(Workout.sessionIdx);
-  }
-}
-
-function showFeedbackScreen(week) {
-  document.getElementById('feedback-title').textContent = `${week}주차 완료!`;
-  document.getElementById('feedback-hard-confirm').classList.add('hidden');
-  document.getElementById('feedback-easy-warning').classList.add('hidden');
-  document.querySelector('.feedback-buttons').classList.remove('hidden');
-  document.querySelector('.feedback-sub').classList.remove('hidden');
-  showScreen('screen-feedback');
-}
-
-function handleFeedback(type) {
-  const plan = CURRICULUM[Workout.sessionIdx];
-  const week = plan.week;
-
-  if (type === 'hard') {
-    document.querySelector('.feedback-buttons').classList.add('hidden');
-    document.querySelector('.feedback-sub').classList.add('hidden');
-    document.getElementById('confirm-msg').textContent =
-      `${week}주차를 한 번 더 할까요?`;
-    document.getElementById('feedback-hard-confirm').classList.remove('hidden');
-
-  } else if (type === 'easy') {
-    document.getElementById('feedback-easy-warning').classList.remove('hidden');
-    setTimeout(() => {
-      markSessionComplete(Workout.sessionIdx);
-    }, 2500);
-
-  } else {
-    markSessionComplete(Workout.sessionIdx);
-  }
-}
-
-function confirmRepeat() {
-  const plan = CURRICULUM[Workout.sessionIdx];
-  const week = plan.week;
-  const firstIdxOfWeek = (week - 1) * 3;
-
-  STATE.completedIdx = STATE.completedIdx.filter(
-    i => i < firstIdxOfWeek || i >= firstIdxOfWeek + 3
-  );
-  STATE.currentIdx = firstIdxOfWeek;
-  saveState(STATE); // Firestore에 변경된 상태 저장
-  renderHome();
+  // 마지막 세션 여부와 관계 없이 항상 바로 다음으로 진행
+  markSessionComplete(Workout.sessionIdx);
 }
 
 function markSessionComplete(idx) {
