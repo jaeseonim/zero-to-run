@@ -213,17 +213,14 @@ function saveState(state) {
    ⑤ Google 로그인 / 로그아웃
    ==================================================== */
 
-// Google 로그인 팝업 열기
+// Google 로그인 (리디렉션 방식 — 모바일/데스크탑 모두 호환)
 function signInWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider(); // Google 로그인 공급자 생성
-  auth.signInWithPopup(provider) // 팝업 창으로 Google 계정 선택
+  // 팝업 대신 구글 로그인 페이지로 이동 후 앱으로 돌아오는 방식 (모바일 호환)
+  auth.signInWithRedirect(provider)
     .catch(e => {
-      // 팝업 닫기 등 사용자 취소는 에러 메시지 표시 안 함
-      if (e.code !== 'auth/popup-closed-by-user') {
-        alert('로그인에 실패했어요. 다시 시도해주세요.\n(' + e.message + ')');
-      }
+      alert('로그인에 실패했어요. 다시 시도해주세요.\n(' + e.message + ')');
     });
-  // 로그인 성공 시 → onAuthStateChanged가 자동으로 감지해서 홈 화면으로 이동
 }
 
 // 로그아웃
@@ -837,6 +834,11 @@ function resetApp() {
    ⑲ 진입점 — Firebase 로그인 상태에 따라 화면 결정
    ==================================================== */
 (function init() {
+  // 구글 로그인 페이지에서 앱으로 돌아왔을 때 결과 처리 (리디렉션 방식 필수)
+  auth.getRedirectResult().catch(e => {
+    alert('로그인에 실패했어요. 다시 시도해주세요.\n(' + e.message + ')');
+  });
+
   // onAuthStateChanged: 앱 시작 시 + 로그인/로그아웃 때마다 자동으로 실행됨
   auth.onAuthStateChanged(async (user) => {
     if (user) {
