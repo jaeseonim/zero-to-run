@@ -177,7 +177,12 @@ async function loadState(uid) {
     // users/{uid} 문서를 읽어옴
     const doc = await db.collection('users').doc(uid).get();
     if (doc.exists && doc.data().progress) {
-      return doc.data().progress; // Firestore에 저장된 진행 상황 반환
+      const data = doc.data().progress;
+      // 각 필드가 없을 경우를 대비해 기본값으로 보호 (??는 null/undefined일 때만 기본값 사용)
+      return {
+        currentIdx:   data.currentIdx   ?? 0,
+        completedIdx: data.completedIdx ?? [],
+      };
     }
   } catch (e) {
     // 네트워크 오류 등 — 기본값으로 진행
