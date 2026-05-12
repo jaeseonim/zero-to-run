@@ -609,8 +609,11 @@ function startWorkout(sessionIdx) {
   Workout.intervalId = setInterval(tick, 1000);
 }
 
-function resumeWorkout(progress) {
+// loadedAt: confirm() 띄우기 직전 시각. confirm 대기 시간을 경과 시간에서 제외하기 위해 사용.
+function resumeWorkout(progress, loadedAt) {
   const plan = CURRICULUM[progress.sessionIdx];
+  const now  = Date.now();
+  const confirmWaitMs = loadedAt ? (now - loadedAt) : 0; // confirm 대기 시간(ms)
 
   Workout.sessionIdx        = progress.sessionIdx;
   Workout.phases            = plan.phases;
@@ -619,21 +622,24 @@ function resumeWorkout(progress) {
   Workout.prevPhasesElapsed = progress.prevPhasesElapsed;
 
   if (progress.isPaused && progress.pauseTime) {
-    // 일시정지 상태로 저장됐던 경우:
-    // 저장 당시 phase 내 경과 시간 = pauseTime - phaseStartTime
+    // ── 일시정지 상태로 저장됐던 경우 ──
+    // 일시정지 직전 phase 내 경과 시간 = pauseTime - phaseStartTime
     // 새로고침 후 현재 시각 기준으로 phaseStartTime을 재보정해
     // phaseRemainingSec()이 일시정지 직전과 동일한 값을 반환하게 한다.
+    // (confirm 대기 시간은 어차피 isPaused=true라 타이머 안 돌아가므로 무관)
     const elapsedAtPause = progress.pauseTime - progress.phaseStartTime;
-    Workout.phaseStartTime = Date.now() - elapsedAtPause;
+    Workout.phaseStartTime = now - elapsedAtPause;
     Workout.isPaused       = true;
-    Workout.pauseTime      = Date.now();
+    Workout.pauseTime      = now;
   } else {
-    // 정상 진행 중이던 경우: 기존 로직 그대로
-    Workout.phaseStartTime = progress.phaseStartTime;
+    // ── 진행 중이던 경우 ──
+    // confirm 대기 시간만큼 phaseStartTime을 앞으로 밀어
+    // "confirm 뜨는 순간"에 시간이 멈춰 있던 것처럼 보정한다.
+    Workout.phaseStartTime = progress.phaseStartTime + confirmWaitMs;
     Workout.isPaused       = false;
     Workout.pauseTime      = 0;
 
-    catchUpPhases(); // 백그라운드에서 흐른 시간 따라잡기
+    catchUpPhases(); // 백그라운드에서 실제로 흐른 시간 따라잡기
   }
 
   buildPhaseMap();
@@ -748,6 +754,7 @@ function togglePause() {
     Workout.pauseTime = Date.now();
 
     releaseWakeLock();
+    saveWorkoutProgress(); // 일시정지 상태를 즉시 저장 (새로고침 대비)
 
     document.getElementById('btn-pause').textContent = '재개하기';
   }
@@ -888,13 +895,14 @@ function resetApp() {
         const plan = CURRICULUM[progress.sessionIdx];
         if (plan && plan.type === 'workout') {
           const phase = plan.phases[progress.phaseIdx];
+          const loadedAt = Date.now(); // confirm 띄우기 직전 시각 기록
           const resume = confirm(
             `이전에 ${plan.week}주차 ${plan.session}회차 운동 중이었어요.\n` +
             `"${phase?.label || ''}" 구간부터 이어서 할까요?`
           );
           if (resume) {
             document.getElementById('phase-map').innerHTML = '';
-            resumeWorkout(progress);
+            resumeWorkout(progress, loadedAt); // confirm 대기 시간 보정용
             return; // 타이머 화면으로 이동했으므로 여기서 종료
           } else {
             clearWorkoutProgress(); // 이어서 안 할 경우 임시 데이터 삭제
