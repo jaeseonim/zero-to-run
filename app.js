@@ -45,7 +45,7 @@ const APP_KEY = 'firststep_c25k';
 // 잠금 기능 플래그
 // 개발 중: false (어느 주차든 자유롭게 접근 가능)
 // 앱 출시 시: true 로 바꾸면 순서대로만 진행 가능
-const LOCK_ENABLED = false;
+const LOCK_ENABLED = true;
 
 const WARMUP_SEC   = 5 * 60;
 const COOLDOWN_SEC = 5 * 60;
