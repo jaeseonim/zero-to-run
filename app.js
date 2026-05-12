@@ -302,10 +302,12 @@ const WORKOUT_KEY = APP_KEY + '_workout'; // 타이머 진행 상태는 localSto
 
 function saveWorkoutProgress() {
   const data = {
-    sessionIdx:      Workout.sessionIdx,
-    phaseIdx:        Workout.phaseIdx,
-    phaseStartTime:  Workout.phaseStartTime,
+    sessionIdx:        Workout.sessionIdx,
+    phaseIdx:          Workout.phaseIdx,
+    phaseStartTime:    Workout.phaseStartTime,
     prevPhasesElapsed: Workout.prevPhasesElapsed,
+    isPaused:          Workout.isPaused,
+    pauseTime:         Workout.pauseTime,
     date: new Date().toLocaleDateString('ko-KR'),
   };
   localStorage.setItem(WORKOUT_KEY, JSON.stringify(data)); // 빠른 저장: localStorage 사용
@@ -614,19 +616,34 @@ function resumeWorkout(progress) {
   Workout.phases            = plan.phases;
   Workout.totalDuration     = totalSeconds(plan.phases);
   Workout.phaseIdx          = progress.phaseIdx;
-  Workout.phaseStartTime    = progress.phaseStartTime;
   Workout.prevPhasesElapsed = progress.prevPhasesElapsed;
-  Workout.isPaused          = false;
-  Workout.pauseTime         = 0;
 
-  catchUpPhases();
+  if (progress.isPaused && progress.pauseTime) {
+    // 일시정지 상태로 저장됐던 경우:
+    // 저장 당시 phase 내 경과 시간 = pauseTime - phaseStartTime
+    // 새로고침 후 현재 시각 기준으로 phaseStartTime을 재보정해
+    // phaseRemainingSec()이 일시정지 직전과 동일한 값을 반환하게 한다.
+    const elapsedAtPause = progress.pauseTime - progress.phaseStartTime;
+    Workout.phaseStartTime = Date.now() - elapsedAtPause;
+    Workout.isPaused       = true;
+    Workout.pauseTime      = Date.now();
+  } else {
+    // 정상 진행 중이던 경우: 기존 로직 그대로
+    Workout.phaseStartTime = progress.phaseStartTime;
+    Workout.isPaused       = false;
+    Workout.pauseTime      = 0;
 
-  requestWakeLock();
+    catchUpPhases(); // 백그라운드에서 흐른 시간 따라잡기
+  }
+
   buildPhaseMap();
   renderTimerScreen();
   showScreen('screen-timer');
 
-  Workout.intervalId = setInterval(tick, 1000);
+  if (!Workout.isPaused) {
+    requestWakeLock();
+    Workout.intervalId = setInterval(tick, 1000);
+  }
 }
 
 // 한 번에 여러 phase를 건너뛰어야 할 때 (백그라운드/새로고침 후)
