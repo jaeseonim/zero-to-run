@@ -519,9 +519,10 @@ function showSessionCard(sesIdx) {
 
   const btn = document.getElementById('btn-start');
   if (isDone) {
-    btn.textContent = '완료한 세션이에요 ✓';
-    btn.disabled = true;
-    btn.style.opacity = '0.4';
+    btn.textContent = '시작하기 →';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.onclick = () => startWorkout(sesIdx); // STATE.currentIdx는 변경하지 않음
   } else if (isLocked) {
     btn.textContent = '이전 세션을 먼저 완료해야 해요';
     btn.disabled = true;
@@ -582,12 +583,13 @@ function buildWorkoutMeta(plan) {
    ⑬ 운동 시작 / 재개
    ==================================================== */
 
-function startWorkout() {
+function startWorkout(sessionIdx) {
   document.getElementById('btn-start').onclick = startWorkout;
 
-  const plan = CURRICULUM[STATE.currentIdx];
+  const idx  = (sessionIdx !== undefined) ? sessionIdx : STATE.currentIdx;
+  const plan = CURRICULUM[idx];
 
-  Workout.sessionIdx        = STATE.currentIdx;
+  Workout.sessionIdx        = idx;
   Workout.phases            = plan.phases;
   Workout.totalDuration     = totalSeconds(plan.phases);
   Workout.phaseIdx          = 0;
@@ -789,9 +791,13 @@ function finishWorkout() {
 }
 
 function markSessionComplete(idx) {
-  if (!STATE.completedIdx.includes(idx)) {
-    STATE.completedIdx.push(idx); // 완료 세션 목록에 추가
+  // 이미 완료한 세션을 다시 완료한 경우 → STATE / completedIdx 변경 없이 홈으로
+  if (STATE.completedIdx.includes(idx)) {
+    renderHome();
+    return;
   }
+
+  STATE.completedIdx.push(idx); // 완료 세션 목록에 추가
 
   if (STATE.completedIdx.length >= TOTAL_SESSIONS) {
     saveState(STATE); // Firestore에 최종 저장
