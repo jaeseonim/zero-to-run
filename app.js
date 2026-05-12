@@ -584,7 +584,7 @@ function buildWorkoutMeta(plan) {
    ==================================================== */
 
 function startWorkout(sessionIdx) {
-  document.getElementById('btn-start').onclick = startWorkout;
+  // 이 줄 삭제: document.getElementById('btn-start').onclick = startWorkout;
 
   const idx  = (sessionIdx !== undefined) ? sessionIdx : STATE.currentIdx;
   const plan = CURRICULUM[idx];
