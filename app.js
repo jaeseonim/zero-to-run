@@ -416,7 +416,7 @@ function renderHome() {
   showScreen('screen-home');
 
   const btn = document.getElementById('btn-start');
-  btn.onclick   = startWorkout;
+  btn.onclick   = () => startWorkout();
   btn.disabled  = false;
   btn.style.opacity = '1';
   btn.textContent   = '시작하기 →';
@@ -584,7 +584,7 @@ function buildWorkoutMeta(plan) {
    ==================================================== */
 
 function startWorkout(sessionIdx) {
-  // 이 줄 삭제: document.getElementById('btn-start').onclick = startWorkout;
+  document.getElementById('btn-start').onclick = () => startWorkout();
 
   const idx  = (sessionIdx !== undefined) ? sessionIdx : STATE.currentIdx;
   const plan = CURRICULUM[idx];
