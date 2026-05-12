@@ -609,11 +609,13 @@ function startWorkout(sessionIdx) {
   Workout.intervalId = setInterval(tick, 1000);
 }
 
-// loadedAt: confirm() 띄우기 직전 시각. confirm 대기 시간을 경과 시간에서 제외하기 위해 사용.
+// loadedAt: confirm() 띄우기 직전 시각 (= 사실상 새로고침 시각).
+// 저장 당시 일시정지 중이었으면 그 시점을, 아니었으면 새로고침 시각을
+// "타이머가 멈춘 시점"으로 삼아 항상 일시정지 상태로 복원한다.
+// 사용자가 재개하기를 눌러야만 타이머가 다시 시작된다.
 function resumeWorkout(progress, loadedAt) {
   const plan = CURRICULUM[progress.sessionIdx];
   const now  = Date.now();
-  const confirmWaitMs = loadedAt ? (now - loadedAt) : 0; // confirm 대기 시간(ms)
 
   Workout.sessionIdx        = progress.sessionIdx;
   Workout.phases            = plan.phases;
@@ -621,35 +623,25 @@ function resumeWorkout(progress, loadedAt) {
   Workout.phaseIdx          = progress.phaseIdx;
   Workout.prevPhasesElapsed = progress.prevPhasesElapsed;
 
-  if (progress.isPaused && progress.pauseTime) {
-    // ── 일시정지 상태로 저장됐던 경우 ──
-    // 일시정지 직전 phase 내 경과 시간 = pauseTime - phaseStartTime
-    // 새로고침 후 현재 시각 기준으로 phaseStartTime을 재보정해
-    // phaseRemainingSec()이 일시정지 직전과 동일한 값을 반환하게 한다.
-    // (confirm 대기 시간은 어차피 isPaused=true라 타이머 안 돌아가므로 무관)
-    const elapsedAtPause = progress.pauseTime - progress.phaseStartTime;
-    Workout.phaseStartTime = now - elapsedAtPause;
-    Workout.isPaused       = true;
-    Workout.pauseTime      = now;
-  } else {
-    // ── 진행 중이던 경우 ──
-    // confirm 대기 시간만큼 phaseStartTime을 앞으로 밀어
-    // "confirm 뜨는 순간"에 시간이 멈춰 있던 것처럼 보정한다.
-    Workout.phaseStartTime = progress.phaseStartTime + confirmWaitMs;
-    Workout.isPaused       = false;
-    Workout.pauseTime      = 0;
+  // "타이머가 멈춘 시점" 결정:
+  //   - 저장 당시 이미 일시정지 중 → 일시정지를 누른 순간
+  //   - 저장 당시 진행 중 → 새로고침한 순간(loadedAt)
+  const frozenAt = (progress.isPaused && progress.pauseTime)
+    ? progress.pauseTime
+    : (loadedAt || now);
 
-    catchUpPhases(); // 백그라운드에서 실제로 흐른 시간 따라잡기
-  }
+  // frozenAt 기준 경과 시간을 현재 시각에 맞게 재보정
+  const elapsedAtFreeze = frozenAt - progress.phaseStartTime;
+  Workout.phaseStartTime = now - elapsedAtFreeze;
+
+  // 항상 일시정지 상태로 복원
+  Workout.isPaused  = true;
+  Workout.pauseTime = now;
 
   buildPhaseMap();
-  renderTimerScreen();
+  renderTimerScreen(); // isPaused=true이므로 버튼이 '재개하기'로 표시됨
   showScreen('screen-timer');
-
-  if (!Workout.isPaused) {
-    requestWakeLock();
-    Workout.intervalId = setInterval(tick, 1000);
-  }
+  // interval 시작 안 함 — 재개하기 버튼을 눌러야 시작
 }
 
 // 한 번에 여러 phase를 건너뛰어야 할 때 (백그라운드/새로고침 후)
@@ -740,6 +732,7 @@ function togglePause() {
 
     Workout.isPaused  = false;
     Workout.pauseTime = 0;
+    saveWorkoutProgress(); // 재개 상태를 즉시 저장 (이전 일시정지 기록 덮어쓰기)
 
     Workout.intervalId = setInterval(tick, 1000);
     requestWakeLock();
