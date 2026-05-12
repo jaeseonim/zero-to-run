@@ -413,6 +413,20 @@ html, body {
   color: rgba(255,255,255,0.7);
 }
 
+/* 타이머 화면 일시정지 버튼 */
+#btn-pause {
+  width: calc(100% - 48px);
+  margin: 0 24px 12px;
+  color: rgba(255,255,255,0.9);
+  border-color: rgba(255,255,255,0.4);
+  background: rgba(0,0,0,0.15);
+  backdrop-filter: blur(4px);
+}
+#btn-pause:hover {
+  background: rgba(0,0,0,0.28);
+  border-color: rgba(255,255,255,0.65);
+}
+
 /* 타이머 화면 완료 버튼 */
 #btn-finish {
   /* .btn-primary의 width:100% + 좌우 margin 24px = 화면 밖으로 잘리는 문제 수정.
@@ -423,38 +437,6 @@ html, body {
   color: white;
   backdrop-filter: blur(4px);
 }
-
-/* ====================================================
-   런닝 팁 (워밍업 구간)
-   ==================================================== */
-.running-tips {
-  margin: 0 24px 24px;
-  padding: 16px 20px;
-  background: rgba(255,255,255,0.2);
-  border-radius: var(--radius-sm);
-  backdrop-filter: blur(4px);
-}
-.tips-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: rgba(0,0,0,0.5);
-  margin-bottom: 12px;
-  text-transform: uppercase;
-}
-[data-theme="dark"] .tips-title { color: rgba(255,255,255,0.5); }
-.tip-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 13px;
-  line-height: 1.6;
-  margin-bottom: 8px;
-  color: rgba(0,0,0,0.7);
-}
-.tip-item:last-child { margin-bottom: 0; }
-[data-theme="dark"] .tip-item { color: rgba(255,255,255,0.8); }
-[data-theme="dark"] .running-tips { background: rgba(0,0,0,0.25); }
 
 /* ====================================================
    화면 3 — 완주

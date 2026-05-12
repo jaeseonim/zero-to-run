@@ -258,6 +258,10 @@ const Workout = {
   phaseStartTime: 0,       // 현재 phase 시작 시각 (Date.now)
   prevPhasesElapsed: 0,    // 이전 phase들의 누적 시간 (초)
 
+  // 일시정지 상태
+  isPaused: false,
+  pauseTime: 0,         // 일시정지 시작 시각 (Date.now)
+
   // 타이머
   intervalId: null,
   wakeLock: null,
@@ -589,6 +593,8 @@ function startWorkout() {
   Workout.phaseIdx          = 0;
   Workout.phaseStartTime    = Date.now();
   Workout.prevPhasesElapsed = 0;
+  Workout.isPaused          = false;
+  Workout.pauseTime         = 0;
 
   saveWorkoutProgress(); // 타이머 진행 상태는 localStorage에 저장
   requestWakeLock();
@@ -608,6 +614,8 @@ function resumeWorkout(progress) {
   Workout.phaseIdx          = progress.phaseIdx;
   Workout.phaseStartTime    = progress.phaseStartTime;
   Workout.prevPhasesElapsed = progress.prevPhasesElapsed;
+  Workout.isPaused          = false;
+  Workout.pauseTime         = 0;
 
   catchUpPhases();
 
@@ -643,13 +651,6 @@ function renderTimerScreen() {
   document.getElementById('phase-label').textContent = phase.label;
   document.getElementById('phase-desc').textContent  = PHASE_LABELS[phase.type] || '';
 
-  const tipsEl = document.getElementById('running-tips');
-  if (phase.type === 'warmup') {
-    tipsEl.classList.remove('hidden');
-  } else {
-    tipsEl.classList.add('hidden');
-  }
-
   applyPhaseBackground(phase.type);
 
   if (document.getElementById('phase-map').children.length === 0) buildPhaseMap();
@@ -664,6 +665,10 @@ function renderTimerScreen() {
     `총 ${Math.round(Workout.totalDuration / 60)}분`;
 
   document.getElementById('btn-finish').classList.toggle('hidden', !Workout.isFinished());
+
+  // 일시정지 버튼 텍스트 동기화
+  const pauseBtn = document.getElementById('btn-pause');
+  if (pauseBtn) pauseBtn.textContent = Workout.isPaused ? '재개하기' : '일시정지';
 }
 
 function buildPhaseMap() {
@@ -693,6 +698,40 @@ function updateTimerDisplay(sec) {
   const s = sec % 60;
   document.getElementById('timer-min').textContent = String(m).padStart(2, '0');
   document.getElementById('timer-sec').textContent = String(s).padStart(2, '0');
+}
+
+
+/* ====================================================
+   ⑮-0 일시정지 / 재개
+   ==================================================== */
+
+function togglePause() {
+  if (Workout.isPaused) {
+    // ── 재개 ──
+    // 일시정지 동안 흐른 시간만큼 phaseStartTime을 앞당겨
+    // phaseElapsedSec()이 일시정지 전부터 자연스럽게 이어지게 한다.
+    const pausedMs = Date.now() - Workout.pauseTime;
+    Workout.phaseStartTime += pausedMs;
+
+    Workout.isPaused  = false;
+    Workout.pauseTime = 0;
+
+    Workout.intervalId = setInterval(tick, 1000);
+    requestWakeLock();
+
+    document.getElementById('btn-pause').textContent = '일시정지';
+  } else {
+    // ── 일시정지 ──
+    clearInterval(Workout.intervalId);
+    Workout.intervalId = null;
+
+    Workout.isPaused  = true;
+    Workout.pauseTime = Date.now();
+
+    releaseWakeLock();
+
+    document.getElementById('btn-pause').textContent = '재개하기';
+  }
 }
 
 
@@ -743,7 +782,6 @@ function finishWorkout() {
   clearPhaseBackground();
   clearWorkoutProgress(); // 타이머 임시 데이터 삭제
 
-  document.getElementById('running-tips').classList.add('hidden');
   document.getElementById('phase-map').innerHTML = '';
 
   // 마지막 세션 여부와 관계 없이 항상 바로 다음으로 진행
