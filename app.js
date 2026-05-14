@@ -617,6 +617,15 @@ function resumeWorkout(progress, loadedAt) {
   const plan = CURRICULUM[progress.sessionIdx];
   const now  = Date.now();
 
+  // ↓ 디버그용 (확인 후 삭제)
+  console.log('[resume] now:', now);
+  console.log('[resume] loadedAt:', loadedAt);
+  console.log('[resume] now - loadedAt:', now - loadedAt, 'ms');
+  console.log('[resume] progress.phaseStartTime:', progress.phaseStartTime);
+  console.log('[resume] progress.isPaused:', progress.isPaused);
+  console.log('[resume] phase duration:', plan.phases[progress.phaseIdx].duration);
+  // ↑ 디버그용
+
   Workout.sessionIdx        = progress.sessionIdx;
   Workout.phases            = plan.phases;
   Workout.totalDuration     = totalSeconds(plan.phases);
