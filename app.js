@@ -611,8 +611,8 @@ function startWorkout(sessionIdx) {
 
 // loadedAt: confirm() 띄우기 직전 시각 (= 사실상 새로고침 시각).
 // 저장 당시 일시정지 중이었으면 그 시점을, 아니었으면 새로고침 시각을
-// "타이머가 멈춘 시점"으로 삼아 항상 일시정지 상태로 복원한다.
-// 사용자가 재개하기를 눌러야만 타이머가 다시 시작된다.
+// "타이머가 멈춘 시점"으로 삼아 phaseStartTime을 재보정한다.
+// 저장 당시 진행 중이었으면 자동 재개, 일시정지 중이었으면 일시정지 상태로 복원한다.
 function resumeWorkout(progress, loadedAt) {
   const plan = CURRICULUM[progress.sessionIdx];
   const now  = Date.now();
@@ -634,14 +634,27 @@ function resumeWorkout(progress, loadedAt) {
   const elapsedAtFreeze = frozenAt - progress.phaseStartTime;
   Workout.phaseStartTime = now - elapsedAtFreeze;
 
-  // 항상 일시정지 상태로 복원
-  Workout.isPaused  = true;
-  Workout.pauseTime = now;
+  if (progress.isPaused) {
+    // 저장 당시 일시정지 중 → 일시정지 상태로 복원 (재개하기를 눌러야 시작)
+    Workout.isPaused  = true;
+    Workout.pauseTime = now;
 
-  buildPhaseMap();
-  renderTimerScreen(); // isPaused=true이므로 버튼이 '재개하기'로 표시됨
-  showScreen('screen-timer');
-  // interval 시작 안 함 — 재개하기 버튼을 눌러야 시작
+    buildPhaseMap();
+    renderTimerScreen();
+    showScreen('screen-timer');
+    // interval 시작 안 함 — 재개하기 버튼을 눌러야 시작
+  } else {
+    // 저장 당시 진행 중 → 자동으로 타이머 재개
+    Workout.isPaused  = false;
+    Workout.pauseTime = 0;
+
+    buildPhaseMap();
+    renderTimerScreen();
+    showScreen('screen-timer');
+
+    requestWakeLock();
+    Workout.intervalId = setInterval(tick, 1000);
+  }
 }
 
 // 한 번에 여러 phase를 건너뛰어야 할 때 (백그라운드/새로고침 후)
