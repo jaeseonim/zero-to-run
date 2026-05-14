@@ -617,42 +617,17 @@ function resumeWorkout(progress, loadedAt) {
   const plan = CURRICULUM[progress.sessionIdx];
   const now  = Date.now();
 
-  // ↓ 디버그용 (확인 후 삭제)
-  console.log('[resume] now:', now);
-  console.log('[resume] loadedAt:', loadedAt);
-  console.log('[resume] now - loadedAt:', now - loadedAt, 'ms');
-  console.log('[resume] progress.phaseStartTime:', progress.phaseStartTime);
-  console.log('[resume] progress.isPaused:', progress.isPaused);
-  console.log('[resume] phase duration:', plan.phases[progress.phaseIdx].duration);
-  // ↑ 디버그용
-
   Workout.sessionIdx        = progress.sessionIdx;
   Workout.phases            = plan.phases;
   Workout.totalDuration     = totalSeconds(plan.phases);
   Workout.phaseIdx          = progress.phaseIdx;
   Workout.prevPhasesElapsed = progress.prevPhasesElapsed;
 
-  // "타이머가 멈춘 시점" 결정:
-  //   - 저장 당시 이미 일시정지 중 → 일시정지를 누른 순간
-  //   - 저장 당시 진행 중 → 새로고침한 순간(loadedAt)
-  const frozenAt = (progress.isPaused && progress.pauseTime)
-    ? progress.pauseTime
-    : (loadedAt || now);
-
-  // frozenAt 기준 경과 시간을 현재 시각에 맞게 재보정
-  const elapsedAtFreeze = frozenAt - progress.phaseStartTime;
-  Workout.phaseStartTime = now - elapsedAtFreeze;
-
-  // ↓ 추가 디버그 (확인 후 삭제)
-  console.log('[resume] frozenAt:', frozenAt);
-  console.log('[resume] elapsedAtFreeze:', elapsedAtFreeze, 'ms =', elapsedAtFreeze/1000, 's');
-  console.log('[resume] new Workout.phaseStartTime:', Workout.phaseStartTime);
-  console.log('[resume] phaseElapsedSec right after:', Workout.phaseElapsedSec());
-  console.log('[resume] phaseRemainingSec right after:', Workout.phaseRemainingSec());
-  // ↑ 추가 디버그
-
   if (progress.isPaused) {
     // 저장 당시 일시정지 중 → 일시정지 상태로 복원 (재개하기를 눌러야 시작)
+    // phaseStartTime은 원본 그대로 유지하고, pauseTime을 now로 갱신해
+    // 재개 시 togglePause가 (now - pauseTime)만큼 phaseStartTime을 미룬다.
+    Workout.phaseStartTime = progress.phaseStartTime;
     Workout.isPaused  = true;
     Workout.pauseTime = now;
 
@@ -662,6 +637,11 @@ function resumeWorkout(progress, loadedAt) {
     // interval 시작 안 함 — 재개하기 버튼을 눌러야 시작
   } else {
     // 저장 당시 진행 중 → 자동으로 타이머 재개
+    // 페이지가 멈춰있던 시간(now - loadedAt)만큼 phaseStartTime을 뒤로 미뤄
+    // "그동안 타이머도 멈춰 있었던 것"으로 처리한다.
+    // (togglePause의 재개 로직과 동일한 패턴)
+    const frozenDuration = now - (loadedAt || now);
+    Workout.phaseStartTime = progress.phaseStartTime + frozenDuration;
     Workout.isPaused  = false;
     Workout.pauseTime = 0;
 
@@ -670,13 +650,10 @@ function resumeWorkout(progress, loadedAt) {
     showScreen('screen-timer');
 
     requestWakeLock();
-
-    console.log('[resume] localStorage after resume:', localStorage.getItem('firststep_c25k_workout'));
-    saveWorkoutProgress(); // ← 이것도 추가 (수정안)
-    console.log('[resume] localStorage after save:', localStorage.getItem('firststep_c25k_workout'));
-
     Workout.intervalId = setInterval(tick, 1000);
   }
+
+  saveWorkoutProgress();
 }
 
 // 한 번에 여러 phase를 건너뛰어야 할 때 (백그라운드/새로고침 후)
