@@ -629,7 +629,7 @@ function resumeWorkout(progress, loadedAt) {
     // 재개 시 togglePause가 (now - pauseTime)만큼 phaseStartTime을 미룬다.
     Workout.phaseStartTime = progress.phaseStartTime;
     Workout.isPaused  = true;
-    Workout.pauseTime = now;
+    Workout.pauseTime = loadedAt || now;   // ← now에서 loadedAt으로 변경
 
     buildPhaseMap();
     renderTimerScreen();
