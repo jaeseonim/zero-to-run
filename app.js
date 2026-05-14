@@ -624,24 +624,13 @@ function resumeWorkout(progress, loadedAt) {
   Workout.prevPhasesElapsed = progress.prevPhasesElapsed;
 
   if (progress.isPaused) {
-    // 저장 당시 일시정지 중 → 일시정지 상태로 복원 (재개하기를 눌러야 시작)
-    // phaseStartTime은 원본 그대로 유지하고, pauseTime을 now로 갱신해
-    // 재개 시 togglePause가 (now - pauseTime)만큼 phaseStartTime을 미룬다.
-    Workout.phaseStartTime = progress.phaseStartTime;
+    // 일시정지 상태: phaseElapsedSec()가 "일시정지 직전 경과 시간"을 돌려주도록
+    // phaseStartTime을 보정. 재개 시 togglePause가 (재개 시각 - pauseTime)만큼
+    // 다시 미루면 일시정지 + 페이지 멈춤 시간이 모두 자연스럽게 제외된다.
+    const elapsedAtPause = progress.pauseTime - progress.phaseStartTime;
+    Workout.phaseStartTime = now - elapsedAtPause;
     Workout.isPaused  = true;
-    Workout.pauseTime = loadedAt || now;   // ← now에서 loadedAt으로 변경
-
-      // ↓ 디버그용 (확인 후 삭제)
-    console.log('[paused-resume] now:', now);
-    console.log('[paused-resume] loadedAt:', loadedAt);
-    console.log('[paused-resume] now - loadedAt:', now - loadedAt, 'ms');
-    console.log('[paused-resume] progress.phaseStartTime:', progress.phaseStartTime);
-    console.log('[paused-resume] progress.pauseTime (저장된 값):', progress.pauseTime);
-    console.log('[paused-resume] Workout.phaseStartTime:', Workout.phaseStartTime);
-    console.log('[paused-resume] Workout.pauseTime:', Workout.pauseTime);
-    console.log('[paused-resume] phaseElapsedSec right after:', Workout.phaseElapsedSec());
-    console.log('[paused-resume] phaseRemainingSec right after:', Workout.phaseRemainingSec());
-    // ↑ 디버그용
+    Workout.pauseTime = now;  // ← 다시 now로 변경 (아래 설명 참고)
 
     buildPhaseMap();
     renderTimerScreen();
@@ -753,14 +742,6 @@ function togglePause() {
     // phaseElapsedSec()이 일시정지 전부터 자연스럽게 이어지게 한다.
     const pausedMs = Date.now() - Workout.pauseTime;
     Workout.phaseStartTime += pausedMs;
-
-    // ↓ 디버그용
-    console.log('[togglePause-resume] Date.now():', Date.now());
-    console.log('[togglePause-resume] Workout.pauseTime:', Workout.pauseTime);
-    console.log('[togglePause-resume] pausedMs:', pausedMs);
-    console.log('[togglePause-resume] new Workout.phaseStartTime:', Workout.phaseStartTime);
-    console.log('[togglePause-resume] phaseElapsedSec right after:', Workout.phaseElapsedSec());
-    // ↑ 디버그용
 
     Workout.isPaused  = false;
     Workout.pauseTime = 0;
