@@ -670,6 +670,11 @@ function resumeWorkout(progress, loadedAt) {
     showScreen('screen-timer');
 
     requestWakeLock();
+
+    console.log('[resume] localStorage after resume:', localStorage.getItem('firststep_c25k_workout'));
+    saveWorkoutProgress(); // ← 이것도 추가 (수정안)
+    console.log('[resume] localStorage after save:', localStorage.getItem('firststep_c25k_workout'));
+
     Workout.intervalId = setInterval(tick, 1000);
   }
 }
