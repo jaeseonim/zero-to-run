@@ -643,6 +643,14 @@ function resumeWorkout(progress, loadedAt) {
   const elapsedAtFreeze = frozenAt - progress.phaseStartTime;
   Workout.phaseStartTime = now - elapsedAtFreeze;
 
+  // ↓ 추가 디버그 (확인 후 삭제)
+  console.log('[resume] frozenAt:', frozenAt);
+  console.log('[resume] elapsedAtFreeze:', elapsedAtFreeze, 'ms =', elapsedAtFreeze/1000, 's');
+  console.log('[resume] new Workout.phaseStartTime:', Workout.phaseStartTime);
+  console.log('[resume] phaseElapsedSec right after:', Workout.phaseElapsedSec());
+  console.log('[resume] phaseRemainingSec right after:', Workout.phaseRemainingSec());
+  // ↑ 추가 디버그
+
   if (progress.isPaused) {
     // 저장 당시 일시정지 중 → 일시정지 상태로 복원 (재개하기를 눌러야 시작)
     Workout.isPaused  = true;
